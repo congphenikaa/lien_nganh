@@ -64,6 +64,33 @@ const AddCourse = () => {
     }
   }
 
+  const addLecture = () => {
+    setChapters(
+      chapters.map((chapters) => {
+        if(chapters.chapterId === currentChapterId){
+          const newLecture = {
+            ...lectureDetails,
+            lectureOrder: chapters.chapterContent.length > 0 ? chapters.chapterContent.slice(-1)[0].lectureOrder + 1 : 1,
+            lectureId: uniqid()
+          };
+          chapters.chapterContent.push(newLecture);
+        }
+        return chapters;
+      })
+    );
+    setShowPopup(false);
+    setLectureDetails({
+      lectureTitle: '',
+      lectureDuration: '',
+      lectureUrl: '',
+      isPreviewFree: false,
+    });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+  }
+
   useEffect(() => {
     if(!quillRef.current && editorRef.current) {
       quillRef.current = new Quill(editorRef.current, {
@@ -75,7 +102,7 @@ const AddCourse = () => {
   return (
     <div className='h-screen overflow-scroll flex flex-col items-start
     justify-between md:p-8 md:pb-0 p-4 pt-8 pb-0'>
-      <form action="" className='flex flex-col gap-4 max-w-md w-full text-gray-500'>
+      <form onSubmit={handleSubmit} className='flex flex-col gap-4 max-w-md w-full text-gray-500'>
         <div className='flex flex-col gap-1'>
           <p>Course Title</p>
           <input onChange={e => setCourseTitle(e.target.value)} value={courseTitle} 
@@ -188,7 +215,7 @@ const AddCourse = () => {
                     lectureUrl: e.target.value })}/>
                 </div>
 
-                <div className='mb-2'>
+                <div className='flex gap-2 my-4'>
                   <p>Is Preview Free?</p>
                   <input 
                   type="checkbox" 
@@ -201,7 +228,7 @@ const AddCourse = () => {
 
                 <div>
                   <button type='button' className='w-full bg-blue-400 text-white px-4
-                  py-2 rounded'>Add</button>
+                  py-2 rounded' onClick={addLecture}>Add</button>
 
                   <img onClick={() => setShowPopup(false)} src={assets.cross_icon} 
                   className='absolute top-4 right-4 w-4 cursor-pointer' alt="" />
