@@ -38,7 +38,6 @@ export const addCourse = async (req, res) => {
 
         res.json({ success: true, message: 'Course Added Successfully'})
 
-
     }catch (error) {
         res.json({ success: false, message: error.message})
     }
@@ -59,7 +58,7 @@ export const getEducatorCourses = async (req, res) => {
 
 export const educatorDashboardData = async (req, res) => {
     try {
-        const educator = rep.auth.userId;
+        const educator = req.auth.userId;
         const courses = await Course.find({educator});
         const totalCourses = courses.length;
 

@@ -286,7 +286,6 @@ export const dummyCourses = [
         "courseThumbnail": "https://img.youtube.com/vi/CBWnBi-awSA/maxresdefault.jpg"
     },
     {
-        "_id": "675ac1512100b91a6d9b8b24",
         "courseTitle": "Advanced Python Programming",
         "courseDescription": "<h2>Deep Dive into Python Programming</h2><p>This course is designed for those who have a basic understanding of Python and want to take their skills to the next level. You will explore advanced topics such as decorators, generators, and context managers.</p><p>By the end of this course, you will be able to write efficient and clean Python code, and understand how to leverage Python's powerful features for real-world applications.</p><ul><li>Master advanced data structures</li><li>Implement object-oriented programming concepts</li><li>Work with libraries and frameworks</li></ul>",
         "coursePrice": 79.99,
@@ -316,46 +315,8 @@ export const dummyCourses = [
                     }
                 ]
             },
-            {
-                "chapterId": "chapter2",
-                "chapterOrder": 2,
-                "chapterTitle": "Object-Oriented Programming",
-                "chapterContent": [
-                    {
-                        "lectureId": "lecture3",
-                        "lectureTitle": "Classes and Objects",
-                        "lectureDuration": 900,
-                        "lectureUrl": "https://youtu.be/HdLIMoQkXFA",
-                        "isPreviewFree": true,
-                        "lectureOrder": 1
-                    },
-                    {
-                        "lectureId": "lecture4",
-                        "lectureTitle": "Inheritance and Polymorphism",
-                        "lectureDuration": 950,
-                        "lectureUrl": "https://youtu.be/HdLIMoQkXFA",
-                        "isPreviewFree": false,
-                        "lectureOrder": 2
-                    }
-                ]
-            }
-        ],
-        "educator": "675ac1512100b91a6d9b8b24",
-        "enrolledStudents": [
-            "user_2qQlvXyr02B4Bq6hT0Gvaa5fT9V",
-            "user_2qjlgkAqIMpiR2flWIRzvWKtE0w"
-        ],
-        "courseRatings": [
-            {
-                "userId": "user_2qjlgkAqIMpiR2flWIRzvWKtE0w",
-                "rating": 5,
-                "_id": "6776369244daad0f313d81a9"
-            }
-        ],
-        "createdAt": "2024-12-17T08:16:53.622Z",
-        "updatedAt": "2025-01-02T06:47:54.446Z",
-        "__v": 3,
-        "courseThumbnail": "https://img.youtube.com/vi/HdLIMoQkXFA/maxresdefault.jpg"
+            
+        ], 
     },
     {
         "_id": "605c72efb3f1c2b1f8e4e1ae",
