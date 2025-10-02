@@ -62,7 +62,7 @@ export const educatorDashboardData = async (req, res) => {
         const courses = await Course.find({educator});
         const totalCourses = courses.length;
 
-        const courseIds = courses.map((course) => course._id);
+        const courseIds = courses.map(course => course._id);
 
         // Calculate total earnings from purchases
         const purchases = await Purchase.find({
