@@ -44,11 +44,15 @@ const CourseDetails = () => {
       if(isAlreadyEnrolled){
         return toast.warn('Already Enrolled')
       }
+      if (!courseData || !courseData._id) {
+        toast.error('Course data is not loaded yet. Please try again.')
+        return;
+      }
       const token = await getToken();
-      const {data} = await axios.post(backendUrl + '/api/user/purchase', {courseId:courseData._id}, {headers: {Authorization: `Bearer ${token}`}})
+      const {data} = await axios.post(backendUrl + '/api/user/momo-payment', {courseId:courseData._id}, {headers: {Authorization: `Bearer ${token}`}})
       if (data.success){
-        const {session_url} = data
-        window.location.replace(session_url)
+        const {payment_url} = data
+        window.location.replace(payment_url)
       }else{
         toast.error(data.message)
       }
