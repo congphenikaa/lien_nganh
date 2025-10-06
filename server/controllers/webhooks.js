@@ -1,8 +1,8 @@
 import {Webhook} from "svix";
 import User from "../models/User.js";
-import Stripe from "stripe";
 import { Purchase } from "../models/Purchase.js"
 import Course from "../models/Course.js"
+import crypto from 'crypto'
 
 //API Controller Function to manage Clerk User with database
 
@@ -56,59 +56,86 @@ export const clerkWebhooks = async (req, res)=>{
     }
 }
 
-// const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY)
+export const momoWebhooks = async (req, res) => {
+    try {
+        const { 
+            partnerCode, 
+            orderId, 
+            requestId, 
+            amount, 
+            orderInfo, 
+            orderType, 
+            transId, 
+            resultCode, 
+            message, 
+            payType, 
+            responseTime, 
+            extraData, 
+            signature 
+        } = req.body;
 
-// export const  stripeWebhooks = async(request, response)=>{
-//     const sig = request.headers['stripe-signature'];
-//     let event;
-//     try {
-//         event = Stripe.webhooks.constructEvent(request.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+        // Xác thực signature (tùy chọn nhưng khuyến nghị)
+        const secretKey = process.env.MOMO_SECRET_KEY || 'K951B6PE1waDMi640xX08PD3vg6EkVlz';
+        
+        const rawSignature = `accessKey=${process.env.MOMO_ACCESS_KEY}&amount=${amount}&extraData=${extraData}&message=${message}&orderId=${orderId}&orderInfo=${orderInfo}&orderType=${orderType}&partnerCode=${partnerCode}&payType=${payType}&requestId=${requestId}&responseTime=${responseTime}&resultCode=${resultCode}&transId=${transId}`;
+        
+        const expectedSignature = crypto.createHmac('sha256', secretKey)
+            .update(rawSignature)
+            .digest('hex');
 
-//     }
-//     catch (err) {
-//         response.status(400).send(`Webhook Error: ${err.message}`)
-//     }
+        if (signature !== expectedSignature) {
+            console.log('Invalid signature');
+            return res.status(400).json({ error: 'Invalid signature' });
+        }
 
-//     switch (event.type) {
-//         case 'payment_intent.succeeded' :{
-//             const paymentIntent = event.data.object;
-//             const paymentIntentId = paymentIntent.id;
-//             const session = await stripeInstance.checkout.sessions.list({
-//                 payment_intent: paymentIntentId
-//             })
+        // Xử lý kết quả thanh toán
+        if (resultCode === 0) {
+            // Thanh toán thành công
+            try {
+                const decodedExtraData = JSON.parse(Buffer.from(extraData, 'base64').toString());
+                const purchaseId = decodedExtraData.purchaseId;
 
-//             const { purchaseId } = session.data[0].metadata;
-//             const purchaseData = await Purchase.findById(purchaseId);
-//             const userData = await User.findById(purchaseData.userId)
-//             const courseData = await Course.findById(purchaseData.courseId.toString())
+                const purchaseData = await Purchase.findById(purchaseId);
+                const userData = await User.findById(purchaseData.userId);
+                const courseData = await Course.findById(purchaseData.courseId.toString());
 
-//             courseData.enrolledStudents.push(userData)
-//             await courseData.save()
+                // Cập nhật thông tin
+                courseData.enrolledStudents.push(userData);
+                await courseData.save();
 
-//             userData.enrolledCourses.push(courseData._id)
-//             await userData.save()
+                userData.enrolledCourses.push(courseData._id);
+                await userData.save();
 
-//             purchaseData.status = 'completed'
-//             await purchaseData.save()
+                purchaseData.status = 'completed';
+                purchaseData.transactionId = transId;
+                await purchaseData.save();
 
-//             break;
-//         }
-//         case 'payment_intent.payment_failed': {
-//             const paymentIntent = event.data.object;
-//             const paymentIntentId = paymentIntent.id;
-//             const session = await stripeInstance.checkout.sessions.list({
-//                 payment_intent: paymentIntentId
-//             })
+                console.log(`Payment successful for purchase: ${purchaseId}`);
+                
+            } catch (dbError) {
+                console.error('Database update error:', dbError);
+            }
+        } else {
+            // Thanh toán thất bại
+            try {
+                const decodedExtraData = JSON.parse(Buffer.from(extraData, 'base64').toString());
+                const purchaseId = decodedExtraData.purchaseId;
 
-//             const { purchaseId } = session.data[0].metadata;
-//             const purchaseData = await Purchase.findById(purchaseId)
-//             purchaseData.status = 'failed'
-//             await purchaseData.save()
-//             break;
-//         }
-//         default:
-//             console.log(`Unhandled event type ${event.type}`);
-            
-//     }
-//     response.json({received: true});
-// }
+                const purchaseData = await Purchase.findById(purchaseId);
+                purchaseData.status = 'failed';
+                purchaseData.transactionId = transId;
+                await purchaseData.save();
+
+                console.log(`Payment failed for purchase: ${purchaseId}`);
+            } catch (dbError) {
+                console.error('Database update error:', dbError);
+            }
+        }
+
+        res.status(200).json({ success: true });
+
+    } catch (error) {
+        console.error('MoMo webhook error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};

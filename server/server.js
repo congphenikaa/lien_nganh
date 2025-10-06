@@ -2,7 +2,7 @@ import express from'express'
 import cors from 'cors'
 import 'dotenv/config'
 import connectDB from './configs/mongodb.js'
-import { clerkWebhooks } from './controllers/webhooks.js'
+import { clerkWebhooks, momoWebhooks } from './controllers/webhooks.js' // Thêm momoWebhooks
 import educatorRouter from './routes/educatorRoutes.js'
 import { clerkMiddleware } from '@clerk/express'
 import connectCloudinary from './configs/cloudinary.js'
@@ -24,10 +24,11 @@ app.use(clerkMiddleware())
 app.get('/', (req, res)=> res.send("API Working"))
 
 app.post('/clerk', express.json(), clerkWebhooks)
+app.post('/momo-webhook', express.json(), momoWebhooks) // Thêm route MoMo webhook
 app.use('/api/educator',express.json(), educatorRouter)
 app.use('/api/course', express.json(), courseRouter)
 app.use('/api/user', express.json(), userRouter)
-// app.post('/stripe', express.raw({type: 'application/json'}), stripeWebhooks)
+
 
 //Port
 const PORT = process.env.PORT || 5000
