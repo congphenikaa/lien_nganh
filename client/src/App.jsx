@@ -12,18 +12,25 @@ import AddCourse from './pages/educator/AddCourse.jsx'
 import MyCourses from './pages/educator/MyCourses.jsx'
 import StudentsEnrolled from './pages/educator/StudentsEnrolled.jsx'
 import Navbar from './components/student/Navbar.jsx'
+
+// Import Admin Components
+import AdminLayout from './pages/admin/AdminLayout.jsx'
+import AdminDashboard from './pages/admin/AdminDashboard.jsx'
+import UserManagement from './components/admin/UserManagement.jsx'
+
 import "quill/dist/quill.snow.css";
 import {ToastContainer} from 'react-toastify'
 
 const App = () => {
-
-  const isEducatorRoute = useMatch('/educator/*');
+  const isEducatorRoute = useMatch('/educator/*')
+  const isAdminRoute = useMatch('/admin/*')
 
   return (
     <div className='text-default min-h-screen '>
       <ToastContainer />
-      {!isEducatorRoute && <Navbar />}
+      {!isEducatorRoute && !isAdminRoute && <Navbar />}
       <Routes>
+        {/* Student Routes */}
         <Route path='/' element={<Home />} />
         <Route path='/course-list' element={<CoursesList />} />
         <Route path='/course-list/:input' element={<CoursesList />} />
@@ -31,11 +38,21 @@ const App = () => {
         <Route path='/my-enrollments' element={<MyEnrollments />} />
         <Route path='/player/:courseId' element={<Player />} />
         <Route path='/loading/:path' element={<Loading />} />
+        
+        {/* Educator Routes */}
         <Route path='/educator' element={<Educator />}>
           <Route path='/educator' element={<Dashboard />} />
           <Route path='add-course' element={<AddCourse />} />
           <Route path='my-courses' element={<MyCourses />} />
           <Route path='student-enrolled' element={<StudentsEnrolled />} />
+        </Route>
+
+        {/* Admin Routes */}
+        <Route path='/admin' element={<AdminLayout />}>
+          <Route path='/admin' element={<AdminDashboard />} />
+          <Route path='users' element={<UserManagement />} />
+          <Route path='courses' element={<div>Course Management - Coming Soon</div>} />
+          <Route path='educators' element={<div>Educator Approval - Coming Soon</div>} />
         </Route>
       </Routes>
     </div>

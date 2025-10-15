@@ -20,6 +20,7 @@ export const AppContextProvider = (props) => {
     const [isEducator, setIsEducator] = useState(false)
     const [enrolledCourses, setEnrolledCourses] = useState([])
     const [userData, setUserData] = useState(null)
+    const [isAdmin, setIsAdmin] = useState(false)
 
 
     const fetchAllCourses = async ()=>{
