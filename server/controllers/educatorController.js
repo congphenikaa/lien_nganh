@@ -6,7 +6,7 @@ import User from '../models/User.js'
 
 export const updateRoleToEducator = async (req, res) => {
     try {
-        const userId = req.auth.userId
+        const userId = req.auth().userId
         await clerkClient.users.updateUserMetadata(userId, {
             publicMetadata: {
                 role: 'educator',
@@ -23,7 +23,7 @@ export const addCourse = async (req, res) => {
     try{
         const {courseData} = req.body
         const imageFile = req.file
-        const educatorId = req.auth.userId
+        const educatorId = req.auth().userId
 
         if (!imageFile) {
             return res.json({ success: false, message: 'Thumbnail Not Attached' })
@@ -45,7 +45,7 @@ export const addCourse = async (req, res) => {
 
 export const getEducatorCourses = async (req, res) => {
     try {
-        const educator = req.auth.userId
+        const educator = req.auth().userId
         const courses = await Course.find({educator})
         res.json({success:true, courses})
 
@@ -57,49 +57,48 @@ export const getEducatorCourses = async (req, res) => {
 // Get educator dashborad data {total earning, entolled students , No. of Courses}
 
 export const educatorDashboardData = async (req, res) => {
-    try {
-        const educator = req.auth.userId;
-        const courses = await Course.find({educator});
-        const totalCourses = courses.length;
+  try {
+    const educator = req.auth().userId; // Updated
+    const courses = await Course.find({ educator });
+    const totalCourses = courses.length;
+    const courseIds = courses.map(course => course._id);
 
-        const courseIds = courses.map(course => course._id);
+    // Lấy tất cả purchase của các course đã tạo
+    const purchases = await Purchase.find({ courseId: { $in: courseIds }, status: 'completed' });
+    const totalEarnings = purchases.reduce((sum, purchase) => sum + purchase.amount, 0);
 
-        // Calculate total earnings from purchases
-        const purchases = await Purchase.find({
-            courseId: { $in: courseIds},
-            status: 'completed'
-        });
+    // Collect unique enrolled students
+    const enrolledStudentsData = [];
+    for (const course of courses) {
+      const students = await User.find(
+        { _id: { $in: course.enrolledStudents } },
+        'name imageUrl'
+      );
 
-        const totalEarnings = purchases.reduce((sum, purchase) => sum + purchase.amount, 0);
-
-        // Collect unique enrooled students Ids with their couse titles
-        const enrolledStudentsData = [];
-        for(const course of courses) {
-            const students = await User.find({
-                _id: {$in: course.enrolledStudents}
-            }, 'name ImageUrl');
-
-            students.forEach((student => {
-                enrolledStudentsData.push({
-                    courseTitle: course.courseTitle,
-                    student
-                });
-            }));
-
-            res.json({success: true, dashboardData: {
-                totalEarnings, enrolledStudentsData, totalCourses
-            }})
-        }
-    }catch (error) {
-        res.json({success:false, message: error.message});
+      students.forEach(student => {
+        enrolledStudentsData.push({ courseTitle: course.courseTitle, student });
+      });
     }
-}
+    res.json({
+      success: true,
+      dashboardData: {
+        totalEarnings,
+        enrolledStudentsData,
+        totalCourses
+      }
+    });
+
+  } catch (error) {
+    res.json({ success: false, message: error.message });
+  }
+};
+
 
 // Get Enrolled Students Data with Purchase Data
 
 export const getEnrolledStudentsData = async (req, res)=> {
     try {
-        const educator = req.auth.userId;
+        const educator = req.auth().userId;
         const courses = await Course.find({educator});
         const courseIds = courses.map(course => course._id);
 

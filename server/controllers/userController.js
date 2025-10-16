@@ -1,11 +1,13 @@
 import User from "../models/User.js"
 import { Purchase } from "../models/Purchase.js"
-import Stripe from "stripe"
 import { CourseProgress } from "../models/CourseProgress.js"
+import Course from "../models/Course.js"
+import crypto from 'crypto'
+import https from 'https'
 
 export const getUserData = async (req,res)=>{
     try {
-        const userId = req.auth.userId
+        const userId = req.auth().userId
         const user = await User.findById(userId)
         if(!user){
             return res.json({success: false, message: 'User Not Found'})
@@ -18,10 +20,9 @@ export const getUserData = async (req,res)=>{
     }
 }
 
-
 export const userEnrolledCourses = async (req, res) =>{
     try {
-        const userId = req.auth.userId
+        const userId = req.auth().userId
         const userData = await User.findById(userId).populate('enrolledCourses')
         res.json({success: true,enrolledCourses: userData.enrolledCourses})
     } catch (error) {
@@ -30,59 +31,130 @@ export const userEnrolledCourses = async (req, res) =>{
     }
 }
 
-export const purchaseCourse = async (req, res)=>{
-    // try {
-    //     const { courseId} = req.body
-    //     const {origin} = req.headers
-    //     const userId = req.auth.userId
-    //     const userData = await User.findById(userId)
-    //     const courseData = await Course.findById(courseId)
-
-    //     if (!userData || !courseData){
-    //         return res.json({success: false, message: 'Data Not Found'})
-    //     }
-    //     const purchaseData ={
-    //         courseId: courseData._id,
-    //         userId,
-    //         amount: (courseData.coursePrice - courseData.discount * courseData.coursePrice /100).toFixed(2),
-    //     }
-
-    //     const newPurchase = await Purchase.create(purchaseData)
-
-    //     const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY)
-
-    //     const currency = process.env.CURRENCY.toLowerCase()
-
-    //     const line_items = [{
-    //         price_data:{
-    //             currency,
-    //             product_data:{
-    //                 name: courseData.courseTitle
-    //             },
-    //             unit_amount: Math.floor(newPurchase.amount)*100
-    //         },
-    //         quantity: 1
-    //     }]
-
-    //     const session = await stripeInstance.checkout.sessions.create({
-    //         success_url: `${origin}/loading/my-enrollments`,
-    //         cancel_url: `${origin}/`,
-    //         line_items: line_items,
-    //         mode: 'payment',
-    //         metadata: {
-    //             purchaseId: newPurchase._id.toString()
-    //         }
-    //     })
-    //     res.json({success: true, session_url: session.url})
-    // } catch (error) {
+// Hàm tạo thanh toán MoMo
+export const createMomoPayment = async (req, res) => {
+    try {
+        const { courseId } = req.body
+        const { origin } = req.headers
+        const userId = req.auth().userId
         
-    // }
-}
+        const userData = await User.findById(userId)
+        const courseData = await Course.findById(courseId)
 
+        if (!userData || !courseData) {
+            return res.json({ success: false, message: 'Data Not Found' })
+        }
+
+        // Tính toán số tiền
+        const amount = Math.floor(courseData.coursePrice - (courseData.discount * courseData.coursePrice / 100));
+
+        // Tạo purchase record
+        const purchaseData = {
+            courseId: courseData._id,
+            userId,
+            amount: amount,
+            paymentMethod: 'momo'
+        }
+
+        const newPurchase = await Purchase.create(purchaseData)
+
+        // Thông tin MoMo
+        const accessKey = process.env.MOMO_ACCESS_KEY || 'F8BBA842ECF85'
+        const secretKey = process.env.MOMO_SECRET_KEY || 'K951B6PE1waDMi640xX08PD3vg6EkVlz'
+        const partnerCode = process.env.MOMO_PARTNER_CODE || 'MOMO'
+        
+        const orderInfo = `Thanh toán khóa học: ${courseData.courseTitle}`
+        const orderId = partnerCode + new Date().getTime()
+        const requestId = orderId
+        const requestType = "payWithMethod"
+        const redirectUrl = `${origin}/loading/my-enrollments`
+        const ipnUrl = `${process.env.BACKEND_URL}/momo-webhook`
+        const extraData = Buffer.from(JSON.stringify({ purchaseId: newPurchase._id.toString() })).toString('base64')
+        const lang = 'vi'
+
+        // Tạo signature
+        const rawSignature = `accessKey=${accessKey}&amount=${amount}&extraData=${extraData}&ipnUrl=${ipnUrl}&orderId=${orderId}&orderInfo=${orderInfo}&partnerCode=${partnerCode}&redirectUrl=${redirectUrl}&requestId=${requestId}&requestType=${requestType}`
+        
+        const signature = crypto.createHmac('sha256', secretKey)
+            .update(rawSignature)
+            .digest('hex')
+
+        // Tạo request body
+        const requestBody = JSON.stringify({
+            partnerCode: partnerCode,
+            partnerName: "Your Company Name",
+            storeId: "YourStoreId",
+            requestId: requestId,
+            amount: amount,
+            orderId: orderId,
+            orderInfo: orderInfo,
+            redirectUrl: redirectUrl,
+            ipnUrl: ipnUrl,
+            lang: lang,
+            requestType: requestType,
+            autoCapture: true,
+            extraData: extraData,
+            orderGroupId: "",
+            signature: signature
+        })
+
+        // Gọi API MoMo
+        const options = {
+            hostname: 'test-payment.momo.vn',
+            port: 443,
+            path: '/v2/gateway/api/create',
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(requestBody)
+            }
+        }
+
+        const paymentUrl = await new Promise((resolve, reject) => {
+            const req = https.request(options, (response) => {
+                let data = ''
+                
+                response.on('data', (chunk) => {
+                    data += chunk
+                })
+                
+                response.on('end', () => {
+                    try {
+                        const result = JSON.parse(data)
+                        if (result.resultCode === 0) {
+                            resolve(result.payUrl)
+                        } else {
+                            reject(new Error(result.message || 'Payment creation failed'))
+                        }
+                    } catch (error) {
+                        reject(error)
+                    }
+                })
+            })
+
+            req.on('error', (error) => {
+                reject(error)
+            })
+
+            req.write(requestBody)
+            req.end()
+        })
+
+        res.json({ 
+            success: true, 
+            payment_url: paymentUrl,
+            purchaseId: newPurchase._id 
+        })
+
+    } catch (error) {
+        console.error('MoMo Payment Error:', error)
+        res.json({ success: false, message: error.message })
+    }
+}
 
 export const updateUserCourseProgress = async (req,res)=>{
     try {
-        const userId = req.auth.userId
+        const userId = req.auth().userId
         const {courseId, lectureId} = req.body
         const progressData = await CourseProgress.findOne({userId, courseId})
 
@@ -108,7 +180,7 @@ export const updateUserCourseProgress = async (req,res)=>{
 
 export const getUserCourseProgress = async (req, res) =>{
     try {
-        const userId = req.auth.userId
+        const userId = req.auth().userId
         const {courseId} = req.body
         const progressData = await CourseProgress.findOne({userId, courseId})
         res.json({success: true, progressData})
@@ -118,9 +190,8 @@ export const getUserCourseProgress = async (req, res) =>{
     }
 }
 
-
 export const addUserRating = async (req, res) =>{
-    const userId = req.auth.userId
+    const userId = req.auth().userId
     const { courseId, rating } = req.body;
     if (!courseId || !userId || !rating || rating < 1 || rating > 5){
         return res.json({success: false, message: 'InValid Details'})
@@ -132,11 +203,11 @@ export const addUserRating = async (req, res) =>{
         }
 
         const user = await User.findById(userId)
-        if(!user || user.enrolledCourses.includes(courseId)){
+        if(!user || !user.enrolledCourses.includes(courseId)){ // Sửa lỗi logic ở đây
             return res.json({ success: false , message: 'User has not purchased this course.'})
         }
 
-        const existingRatingIndex = course.courseRatings.findIndex(r =>r.userId === userId)
+        const existingRatingIndex = course.courseRatings.findIndex(r => r.userId === userId)
 
         if (existingRatingIndex > -1){
             course.courseRatings[existingRatingIndex].rating = rating;
@@ -145,7 +216,6 @@ export const addUserRating = async (req, res) =>{
         }
         await course.save();
         return res.json({success: true, message:'Rating add'})
-
 
     } catch(error) {
         return res.json({success: false, message: error.message})
