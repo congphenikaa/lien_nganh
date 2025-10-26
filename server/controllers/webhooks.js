@@ -32,7 +32,7 @@ export const clerkWebhooks = async (req, res)=>{
 
             case 'user.updated': {
                 const userData = {
-                    email: data.email_address[0].email_address,
+                    email: data.email_addresses[0].email_address,
                     name: data.first_name + " " + data.last_name,
                     imageUrl: data.image_url,
                 }
@@ -94,8 +94,14 @@ export const momoWebhooks = async (req, res) => {
             try {
                 const decodedExtraData = JSON.parse(Buffer.from(extraData, 'base64').toString());
                 const purchaseId = decodedExtraData.purchaseId;
-
+                console.log('Purchase ID from webhook:', purchaseId);
+                console.log('User ID:', purchaseData.userId);
+                console.log('Course ID:', purchaseData.courseId.toString());
                 const purchaseData = await Purchase.findById(purchaseId);
+                if (!purchaseData) {
+                    console.log('Purchase not found:', purchaseId);
+                    return res.status(200).json({ success: false, message: 'Purchase not found' });
+                }
                 const userData = await User.findById(purchaseData.userId);
                 const courseData = await Course.findById(purchaseData.courseId.toString());
 
