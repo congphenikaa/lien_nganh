@@ -1,5 +1,4 @@
 import { createContext, useEffect, useState } from "react";
-import { dummyCourses } from "../assets/assets";
 import { useNavigate } from "react-router-dom";
 import humanizeDuration from 'humanize-duration';
 import { useAuth, useUser} from "@clerk/clerk-react"
@@ -37,9 +36,17 @@ export const AppContextProvider = (props) => {
     }
 
     const fetchUserData = async ()=> {
-      if(user.publicMetadata.role === 'educator'){
-        setIsEducator(true)
+      // Check user role and set flags safely
+      if(user && user.publicMetadata && user.publicMetadata.role){
+        const role = user.publicMetadata.role
+        if(role === 'educator' || role === 'admin'){
+          setIsEducator(true)
+        }
+        if(role === 'admin'){
+          setIsAdmin(true)
+        }
       }
+      
       try {
         const token = await getToken();
         const {data} = await axios.get(backendUrl + '/api/user/data',{headers:{Authorization: `Bearer ${token}`}})
@@ -122,7 +129,7 @@ export const AppContextProvider = (props) => {
     },[user])
 
     const value = {
-      currency, allCourses, navigate, calculateRating, isEducator, setIsEducator,
+      currency, allCourses, navigate, calculateRating, isEducator, setIsEducator, isAdmin, setIsAdmin,
       calculateChapterTime, calculateCourseDuration, calculateNoOfLectures, enrolledCourses, fetchUserEnrolledCourses, backendUrl, userData, setUserData, getToken, fetchAllCourses
     }
 

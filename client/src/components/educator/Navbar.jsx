@@ -1,10 +1,9 @@
 import React from 'react'
-import { assets, dummyEducatorData } from '../../assets/assets'
+import { assets } from '../../assets/assets'
 import { UserButton, useUser } from '@clerk/clerk-react'
 import { Link } from 'react-router-dom'
 
 const Navbar = () => {
-  const educatorData = dummyEducatorData;
   const { user } = useUser();
 
   return (
@@ -15,6 +14,16 @@ const Navbar = () => {
       </Link>
 
       <div className='flex items-center gap-5 text-gray-500 relative'>
+        {/* Admin can access admin panel from educator dashboard */}
+        {user?.publicMetadata?.role === 'admin' && (
+          <Link
+            to='/admin'
+            className='bg-purple-600 text-white px-3 py-1 rounded-full text-sm hover:bg-purple-700 transition-colors'
+          >
+            Admin Panel
+          </Link>
+        )}
+        
         <p>Hi! {user ? user.fullName : 'Developers'}</p>
         {user ? <UserButton/> : <img className='max-w-8' 
         src={assets.profile_img} alt="Profile" />}

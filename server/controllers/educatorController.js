@@ -3,19 +3,94 @@ import Course from '../models/Course.js'
 import { v2 as cloudinary } from 'cloudinary'
 import { Purchase } from '../models/Purchase.js'
 import User from '../models/User.js'
+import EducatorRequest from '../models/EducatorRequest.js'
 
-export const updateRoleToEducator = async (req, res) => {
+// Submit educator request for approval
+export const submitEducatorRequest = async (req, res) => {
     try {
         const userId = req.auth().userId
-        await clerkClient.users.updateUserMetadata(userId, {
-            publicMetadata: {
-                role: 'educator',
-            }
+        const {
+            fullName,
+            email,
+            phone,
+            education,
+            experience,
+            specialization,
+            teachingExperience,
+            motivation,
+            portfolio
+        } = req.body
+
+        // Check if user already has a pending request
+        const existingRequest = await EducatorRequest.findOne({
+            userId,
+            status: 'pending'
         })
-        res.json({success: true, message: 'You can publish a course now'})
-        
+
+        if (existingRequest) {
+            return res.json({
+                success: false,
+                message: 'You already have a pending educator request'
+            })
+        }
+
+        // Check if user is already an educator or admin
+        const user = await clerkClient.users.getUser(userId)
+        if (user.publicMetadata.role === 'educator' || user.publicMetadata.role === 'admin') {
+            return res.json({
+                success: false,
+                message: 'You already have educator access'
+            })
+        }
+
+        const educatorRequest = new EducatorRequest({
+            userId,
+            fullName,
+            email,
+            phone,
+            education,
+            experience,
+            specialization,
+            teachingExperience,
+            motivation,
+            portfolio: portfolio || ''
+        })
+
+        await educatorRequest.save()
+
+        res.json({
+            success: true,
+            message: 'Educator request submitted successfully. Please wait for admin approval.'
+        })
     } catch (error) {
-        res.json({success: false, message: error.message})
+        res.json({ success: false, message: error.message })
+    }
+}
+
+// Get user's educator request status
+export const getEducatorRequestStatus = async (req, res) => {
+    try {
+        const userId = req.auth().userId
+        
+        const request = await EducatorRequest.findOne({ userId })
+            .sort({ createdAt: -1 })
+        
+        if (!request) {
+            return res.json({
+                success: true,
+                status: 'none',
+                message: 'No educator request found'
+            })
+        }
+        
+        res.json({
+            success: true,
+            status: request.status,
+            request: request,
+            message: `Your educator request is ${request.status}`
+        })
+    } catch (error) {
+        res.json({ success: false, message: error.message })
     }
 }
 

@@ -1,15 +1,14 @@
 import React from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { assets } from '../../assets/assets'
 
 const AdminSidebar = () => {
   const location = useLocation()
   
   const menuItems = [
-    { path: '/admin', icon: assets.dashboard_icon, label: 'Dashboard' },
-    { path: '/admin/users', icon: assets.user_icon, label: 'User Management' },
-    { path: '/admin/courses', icon: assets.course_icon, label: 'Course Management' },
-    { path: '/admin/educators', icon: assets.educator_icon, label: 'Educator Approval' },
+    { path: '/admin', icon: '📊', label: 'Dashboard' },
+    { path: '/admin/users', icon: '👥', label: 'User Management' },
+    { path: '/admin/courses', icon: '📚', label: 'Course Management' },
+    { path: '/admin/educators', icon: '👨‍🏫', label: 'Educator Approval' },
   ]
 
   return (
@@ -27,7 +26,7 @@ const AdminSidebar = () => {
               location.pathname === item.path ? 'bg-gray-700 border-r-4 border-blue-500' : ''
             }`}
           >
-            <img src={item.icon} alt={item.label} className='w-5 h-5 mr-3' />
+            <span className='text-lg mr-3'>{item.icon}</span>
             <span>{item.label}</span>
           </Link>
         ))}

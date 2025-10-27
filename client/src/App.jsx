@@ -6,6 +6,7 @@ import CourseDetails from './pages/student/CourseDetails.jsx'
 import MyEnrollments from './pages/student/MyEnrollments.jsx'
 import Player from './pages/student/Player.jsx'
 import Loading from './components/student/Loading.jsx'
+import BecomeEducator from './pages/student/BecomeEducator.jsx'
 import Educator from './pages/educator/Educator.jsx'
 import Dashboard from './pages/educator/Dashboard.jsx'
 import AddCourse from './pages/educator/AddCourse.jsx'
@@ -17,6 +18,7 @@ import Navbar from './components/student/Navbar.jsx'
 import AdminLayout from './pages/admin/AdminLayout.jsx'
 import AdminDashboard from './pages/admin/AdminDashboard.jsx'
 import UserManagement from './components/admin/UserManagement.jsx'
+import EducatorApproval from './components/admin/EducatorApproval.jsx'
 
 import "quill/dist/quill.snow.css";
 import {ToastContainer} from 'react-toastify'
@@ -38,6 +40,7 @@ const App = () => {
         <Route path='/my-enrollments' element={<MyEnrollments />} />
         <Route path='/player/:courseId' element={<Player />} />
         <Route path='/loading/:path' element={<Loading />} />
+        <Route path='/become-educator' element={<BecomeEducator />} />
         
         {/* Educator Routes */}
         <Route path='/educator' element={<Educator />}>
@@ -52,7 +55,7 @@ const App = () => {
           <Route path='/admin' element={<AdminDashboard />} />
           <Route path='users' element={<UserManagement />} />
           <Route path='courses' element={<div>Course Management - Coming Soon</div>} />
-          <Route path='educators' element={<div>Educator Approval - Coming Soon</div>} />
+          <Route path='educators' element={<EducatorApproval />} />
         </Route>
       </Routes>
     </div>
