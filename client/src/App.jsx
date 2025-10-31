@@ -19,6 +19,8 @@ import AdminLayout from './pages/admin/AdminLayout.jsx'
 import AdminDashboard from './pages/admin/AdminDashboard.jsx'
 import UserManagement from './components/admin/UserManagement.jsx'
 import EducatorApproval from './components/admin/EducatorApproval.jsx'
+import CourseManagement from './components/admin/CourseManagement.jsx'
+import RevenueManagement from './components/admin/RevenueManagement.jsx'
 
 import "quill/dist/quill.snow.css";
 import {ToastContainer} from 'react-toastify'
@@ -54,7 +56,8 @@ const App = () => {
         <Route path='/admin' element={<AdminLayout />}>
           <Route path='/admin' element={<AdminDashboard />} />
           <Route path='users' element={<UserManagement />} />
-          <Route path='courses' element={<div>Course Management - Coming Soon</div>} />
+          <Route path='courses' element={<CourseManagement />} />
+          <Route path='revenue' element={<RevenueManagement />} />
           <Route path='educators' element={<EducatorApproval />} />
         </Route>
       </Routes>

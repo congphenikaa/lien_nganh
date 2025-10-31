@@ -9,6 +9,22 @@ import {
     cleanupOldRequests,
     deleteEducatorRequest
 } from '../controllers/adminController.js'
+
+import {
+    getAllCoursesAdmin,
+    getCourseDetailAdmin,
+    toggleCourseStatus,
+    deleteCourse,
+    updateCourseInfo
+} from '../controllers/admin/courseController.js';
+
+import {
+    getRevenueStats,
+    getTopCourses,
+    getRevenueByEducator,
+    getPaymentAnalytics
+} from '../controllers/admin/revenueController.js';
+
 import { protectAdmin } from '../middlewares/authMiddleware.js'
 
 const adminRouter = express.Router()
@@ -26,5 +42,18 @@ adminRouter.get('/educator-requests', protectAdmin, getEducatorRequests)
 adminRouter.put('/educator-requests/:requestId/review', protectAdmin, reviewEducatorRequest)
 adminRouter.delete('/educator-requests/cleanup', protectAdmin, cleanupOldRequests)
 adminRouter.delete('/educator-requests/:requestId', protectAdmin, deleteEducatorRequest)
+
+// Course management
+adminRouter.get('/courses', getAllCoursesAdmin);
+adminRouter.get('/courses/:courseId', getCourseDetailAdmin);
+adminRouter.put('/courses/:courseId/status', toggleCourseStatus);
+adminRouter.put('/courses/:courseId', updateCourseInfo);
+adminRouter.delete('/courses/:courseId', deleteCourse);
+
+// Revenue & analytics
+adminRouter.get('/revenue', getRevenueStats);
+adminRouter.get('/top-courses', getTopCourses);
+adminRouter.get('/revenue/educator/:educatorId', getRevenueByEducator);
+adminRouter.get('/analytics/payments', getPaymentAnalytics);
 
 export default adminRouter
