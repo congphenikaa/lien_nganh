@@ -46,5 +46,5 @@ app.listen(PORT, ()=>{
     // Run cleanup once when server starts
     autoCleanupOldRequests()
     
-    console.log('🧹 Auto cleanup for old educator requests is scheduled every 24 hours')
+    console.log('Auto cleanup for old educator requests is scheduled every 24 hours')
 })

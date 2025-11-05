@@ -22,6 +22,8 @@ import EducatorApproval from './components/admin/EducatorApproval.jsx'
 import CourseManagement from './components/admin/CourseManagement.jsx'
 import RevenueManagement from './components/admin/RevenueManagement.jsx'
 
+import RatingManagement from './components/admin/RatingManagement.jsx'
+
 import "quill/dist/quill.snow.css";
 import {ToastContainer} from 'react-toastify'
 
@@ -58,6 +60,7 @@ const App = () => {
           <Route path='users' element={<UserManagement />} />
           <Route path='courses' element={<CourseManagement />} />
           <Route path='revenue' element={<RevenueManagement />} />
+          <Route path='reviews' element={<RatingManagement />} />
           <Route path='educators' element={<EducatorApproval />} />
         </Route>
       </Routes>

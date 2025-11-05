@@ -10,6 +10,7 @@ const AdminSidebar = () => {
     { path: '/admin/users', icon: '👥', label: 'User Management' },
     { path: '/admin/courses', icon: '📚', label: 'Course Management' },
     { path: '/admin/revenue', icon: '💰', label: 'Revenue & Analytics' },
+    { path: '/admin/reviews', icon: '⭐', label: 'Rating Management' }, // Add this line
     { path: '/admin/educators', icon: '👨‍🏫', label: 'Educator Approval' },
   ]
 

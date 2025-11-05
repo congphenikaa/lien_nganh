@@ -25,6 +25,14 @@ import {
     getPaymentAnalytics
 } from '../controllers/admin/revenueController.js';
 
+import {
+    getAllReviews,
+    getReviewStats,
+    deleteReview,
+    getCoursesForFilter,
+    bulkDeleteReviews
+} from '../controllers/admin/ratingController.js';
+
 import { protectAdmin } from '../middlewares/authMiddleware.js'
 
 const adminRouter = express.Router()
@@ -55,5 +63,12 @@ adminRouter.get('/revenue', getRevenueStats);
 adminRouter.get('/top-courses', getTopCourses);
 adminRouter.get('/revenue/educator/:educatorId', getRevenueByEducator);
 adminRouter.get('/analytics/payments', getPaymentAnalytics);
+
+// Review management routes
+adminRouter.get('/reviews', getAllReviews);
+adminRouter.get('/reviews/stats', getReviewStats);
+adminRouter.get('/reviews/courses', getCoursesForFilter);
+adminRouter.delete('/reviews/:courseId/:reviewId', deleteReview);
+adminRouter.post('/reviews/bulk-delete', bulkDeleteReviews);
 
 export default adminRouter
