@@ -26,7 +26,7 @@ app.use(clerkMiddleware())
 app.get('/', (req, res)=> res.send("API Working"))
 
 app.post('/clerk', express.json(), clerkWebhooks)
-app.post('/momo-webhook', express.json(), momoWebhooks) // Thêm route MoMo webhook
+app.post('/api/momo-webhook', express.json(), momoWebhooks);
 app.use('/api/educator',express.json(), educatorRouter)
 app.use('/api/admin', express.json(), adminRouter)
 app.use('/api/course', express.json(), courseRouter)
