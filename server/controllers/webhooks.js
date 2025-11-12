@@ -77,7 +77,11 @@ export const momoWebhooks = async (req, res) => {
             signature 
         } = req.body;
 
-        // Xác thực signature (tùy chọn nhưng khuyến nghị)
+        console.log('MoMo Webhook received:', {
+            orderId, amount, resultCode, message, extraData
+        });
+
+        // Xác thực signature
         const secretKey = process.env.MOMO_SECRET_KEY || 'K951B6PE1waDMi640xX08PD3vg6EkVlz';
         const accessKey = process.env.MOMO_ACCESS_KEY || 'F8BBA842ECF85';
         
@@ -103,8 +107,23 @@ export const momoWebhooks = async (req, res) => {
             // Thanh toán thành công
             console.log('✅ Payment successful, processing enrollment...');
             try {
-                const decodedExtraData = JSON.parse(Buffer.from(extraData, 'base64').toString());
-                const purchaseId = decodedExtraData.purchaseId;
+                // Parse extraData an toàn
+                let purchaseId;
+                try {
+                    const decodedExtraData = JSON.parse(Buffer.from(extraData, 'base64').toString());
+                    purchaseId = decodedExtraData.purchaseId;
+                } catch (parseError) {
+                    console.log('Error parsing extraData, trying direct parse:', extraData);
+                    // Thử parse trực tiếp nếu base64 fail
+                    try {
+                        const directParse = JSON.parse(extraData);
+                        purchaseId = directParse.purchaseId;
+                    } catch (e) {
+                        console.log('Both parsing methods failed');
+                        return res.status(200).json({ success: false, message: 'Invalid extraData format' });
+                    }
+                }
+
                 console.log('Purchase ID from webhook:', purchaseId);
                 
                 const purchaseData = await Purchase.findById(purchaseId);
@@ -150,6 +169,7 @@ export const momoWebhooks = async (req, res) => {
                     console.log('ℹ️ User already in course enrolledStudents');
                 }
 
+                // Cập nhật purchase status
                 purchaseData.status = 'completed';
                 purchaseData.transactionId = transId;
                 purchaseData.orderId = orderId;
@@ -166,8 +186,19 @@ export const momoWebhooks = async (req, res) => {
             // Thanh toán thất bại
             console.log(`❌ Payment failed with result code: ${resultCode}, message: ${message}`);
             try {
-                const decodedExtraData = JSON.parse(Buffer.from(extraData, 'base64').toString());
-                const purchaseId = decodedExtraData.purchaseId;
+                let purchaseId;
+                try {
+                    const decodedExtraData = JSON.parse(Buffer.from(extraData, 'base64').toString());
+                    purchaseId = decodedExtraData.purchaseId;
+                } catch (parseError) {
+                    try {
+                        const directParse = JSON.parse(extraData);
+                        purchaseId = directParse.purchaseId;
+                    } catch (e) {
+                        console.log('Failed to parse extraData for failed payment');
+                        return res.status(200).json({ success: false, message: 'Invalid extraData format' });
+                    }
+                }
 
                 const purchaseData = await Purchase.findById(purchaseId);
                 if (purchaseData) {
