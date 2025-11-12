@@ -77,11 +77,7 @@ export const momoWebhooks = async (req, res) => {
             signature 
         } = req.body;
 
-        console.log('MoMo Webhook received:', {
-            orderId, amount, resultCode, message, extraData
-        });
-
-        // Xác thực signature
+        // Xác thực signature (tùy chọn nhưng khuyến nghị)
         const secretKey = process.env.MOMO_SECRET_KEY || 'K951B6PE1waDMi640xX08PD3vg6EkVlz';
         const accessKey = process.env.MOMO_ACCESS_KEY || 'F8BBA842ECF85';
         
@@ -107,23 +103,8 @@ export const momoWebhooks = async (req, res) => {
             // Thanh toán thành công
             console.log('✅ Payment successful, processing enrollment...');
             try {
-                // Parse extraData an toàn
-                let purchaseId;
-                try {
-                    const decodedExtraData = JSON.parse(Buffer.from(extraData, 'base64').toString());
-                    purchaseId = decodedExtraData.purchaseId;
-                } catch (parseError) {
-                    console.log('Error parsing extraData, trying direct parse:', extraData);
-                    // Thử parse trực tiếp nếu base64 fail
-                    try {
-                        const directParse = JSON.parse(extraData);
-                        purchaseId = directParse.purchaseId;
-                    } catch (e) {
-                        console.log('Both parsing methods failed');
-                        return res.status(200).json({ success: false, message: 'Invalid extraData format' });
-                    }
-                }
-
+                const decodedExtraData = JSON.parse(Buffer.from(extraData, 'base64').toString());
+                const purchaseId = decodedExtraData.purchaseId;
                 console.log('Purchase ID from webhook:', purchaseId);
                 
                 const purchaseData = await Purchase.findById(purchaseId);
@@ -138,10 +119,9 @@ export const momoWebhooks = async (req, res) => {
                 const userData = await User.findById(purchaseData.userId);
                 const courseData = await Course.findById(purchaseData.courseId);
 
-                if (!userData || !courseData) {
-                    console.log('User or Course not found');
-                    return res.status(200).json({ success: false, message: 'User or Course not found' });
-                }
+                // Cập nhật thông tin
+                courseData.enrolledStudents.push(userData);
+                await courseData.save();
 
                 // Kiểm tra xem đã enroll chưa để tránh duplicate
                 const courseIdStr = purchaseData.courseId.toString();
@@ -186,19 +166,8 @@ export const momoWebhooks = async (req, res) => {
             // Thanh toán thất bại
             console.log(`❌ Payment failed with result code: ${resultCode}, message: ${message}`);
             try {
-                let purchaseId;
-                try {
-                    const decodedExtraData = JSON.parse(Buffer.from(extraData, 'base64').toString());
-                    purchaseId = decodedExtraData.purchaseId;
-                } catch (parseError) {
-                    try {
-                        const directParse = JSON.parse(extraData);
-                        purchaseId = directParse.purchaseId;
-                    } catch (e) {
-                        console.log('Failed to parse extraData for failed payment');
-                        return res.status(200).json({ success: false, message: 'Invalid extraData format' });
-                    }
-                }
+                const decodedExtraData = JSON.parse(Buffer.from(extraData, 'base64').toString());
+                const purchaseId = decodedExtraData.purchaseId;
 
                 const purchaseData = await Purchase.findById(purchaseId);
                 if (purchaseData) {
@@ -210,7 +179,7 @@ export const momoWebhooks = async (req, res) => {
                 }
 
             } catch (dbError) {
-                console.error('Database update error for failed payment:', dbError);
+                console.error('Database update error:', dbError);
             }
         }
 
