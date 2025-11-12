@@ -20,17 +20,50 @@ await connectCloudinary()
 
 //Middlewares
 app.use(cors())
+
+// Apply Clerk middleware BEFORE any JSON parsing
 app.use(clerkMiddleware())
 
-//Routes
+//Routes that don't need authentication (but need JSON parsing)
 app.get('/', (req, res)=> res.send("API Working"))
-
 app.post('/clerk', express.json(), clerkWebhooks)
 app.post('/momo-webhook', express.json(), momoWebhooks) // Thêm route MoMo webhook
-app.use('/api/educator',express.json(), educatorRouter)
+
+// Test route to check Clerk middleware
+app.get('/test-auth', (req, res) => {
+  try {
+    console.log('=== TEST AUTH ROUTE ===');
+    console.log('req.auth available:', typeof req.auth === 'function');
+    console.log('Headers:', req.headers);
+    
+    if (typeof req.auth !== 'function') {
+      return res.json({ success: false, message: 'Clerk middleware not working', auth: 'not available' });
+    }
+    
+    const auth = req.auth();
+    console.log('Auth result:', auth);
+    
+    res.json({ 
+      success: true, 
+      message: 'Clerk middleware working',
+      userId: auth?.userId || 'no user',
+      isAuthenticated: auth?.isAuthenticated || false,
+      sessionStatus: auth?.sessionStatus || 'unknown',
+      auth: auth
+    });
+  } catch (error) {
+    console.error('Test auth error:', error);
+    res.json({ success: false, message: error.message });
+  }
+});
+
+// Protected routes - User routes first to avoid conflicts
+app.use('/api/user', userRouter) // No express.json() here - handled per route
+
+// Other routes with their own middleware
+app.use('/api/educator', express.json(), educatorRouter)
 app.use('/api/admin', express.json(), adminRouter)
 app.use('/api/course', express.json(), courseRouter)
-app.use('/api/user', express.json(), userRouter)
 
 
 //Port

@@ -51,24 +51,24 @@ adminRouter.put('/educator-requests/:requestId/review', protectAdmin, reviewEduc
 adminRouter.delete('/educator-requests/cleanup', protectAdmin, cleanupOldRequests)
 adminRouter.delete('/educator-requests/:requestId', protectAdmin, deleteEducatorRequest)
 
-// Course management
-adminRouter.get('/courses', getAllCoursesAdmin);
-adminRouter.get('/courses/:courseId', getCourseDetailAdmin);
-adminRouter.put('/courses/:courseId/status', toggleCourseStatus);
-adminRouter.put('/courses/:courseId', updateCourseInfo);
-adminRouter.delete('/courses/:courseId', deleteCourse);
+// Course management - ADD protectAdmin middleware
+adminRouter.get('/courses', protectAdmin, getAllCoursesAdmin);
+adminRouter.get('/courses/:courseId', protectAdmin, getCourseDetailAdmin);
+adminRouter.put('/courses/:courseId/status', protectAdmin, toggleCourseStatus);
+adminRouter.put('/courses/:courseId', protectAdmin, updateCourseInfo);
+adminRouter.delete('/courses/:courseId', protectAdmin, deleteCourse);
 
-// Revenue & analytics
-adminRouter.get('/revenue', getRevenueStats);
-adminRouter.get('/top-courses', getTopCourses);
-adminRouter.get('/revenue/educator/:educatorId', getRevenueByEducator);
-adminRouter.get('/analytics/payments', getPaymentAnalytics);
+// Revenue & analytics - ADD protectAdmin middleware
+adminRouter.get('/revenue', protectAdmin, getRevenueStats);
+adminRouter.get('/top-courses', protectAdmin, getTopCourses);
+adminRouter.get('/revenue/educator/:educatorId', protectAdmin, getRevenueByEducator);
+adminRouter.get('/analytics/payments', protectAdmin, getPaymentAnalytics);
 
-// Review management routes
-adminRouter.get('/reviews', getAllReviews);
-adminRouter.get('/reviews/stats', getReviewStats);
-adminRouter.get('/reviews/courses', getCoursesForFilter);
-adminRouter.delete('/reviews/:courseId/:reviewId', deleteReview);
-adminRouter.post('/reviews/bulk-delete', bulkDeleteReviews);
+// Review management routes - ADD protectAdmin middleware
+adminRouter.get('/reviews', protectAdmin, getAllReviews);
+adminRouter.get('/reviews/stats', protectAdmin, getReviewStats);
+adminRouter.get('/reviews/courses', protectAdmin, getCoursesForFilter);
+adminRouter.delete('/reviews/:courseId/:reviewId', protectAdmin, deleteReview);
+adminRouter.post('/reviews/bulk-delete', protectAdmin, bulkDeleteReviews);
 
 export default adminRouter

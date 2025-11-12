@@ -7,36 +7,94 @@ import https from 'https'
 
 export const getUserData = async (req,res)=>{
     try {
-        const userId = req.auth().userId
+        // Check if auth function exists
+        if (typeof req.auth !== 'function') {
+            return res.json({ success: false, message: 'Authentication middleware not available' });
+        }
+        
+        let auth;
+        try {
+            auth = req.auth();
+        } catch (authError) {
+            console.error('❌ Error calling req.auth():', authError);
+            return res.json({ success: false, message: 'Authentication function error' });
+        }
+        
+        if (!auth || !auth.userId) {
+            return res.json({ success: false, message: 'User not authenticated' });
+        }
+        
+        const userId = auth.userId;
         const user = await User.findById(userId)
+        
         if(!user){
             return res.json({success: false, message: 'User Not Found'})
-
         }
+        
         res.json({success: true, user})
     } catch (error) {
+        console.error('❌ Error in getUserData:', error);
         res.json({success: false, message: error.message})
-        
     }
 }
 
 export const userEnrolledCourses = async (req, res) =>{
     try {
-        const userId = req.auth().userId
-        const userData = await User.findById(userId).populate('enrolledCourses')
-        res.json({success: true,enrolledCourses: userData.enrolledCourses})
-    } catch (error) {
-        res.json({success: false, message: error.message})
+        console.log('=== USER ENROLLED COURSES ===');
         
+        // Check authentication
+        if (typeof req.auth !== 'function') {
+            return res.json({ success: false, message: 'Authentication middleware not available' });
+        }
+        
+        const auth = req.auth();
+        if (!auth || !auth.userId) {
+            return res.json({ success: false, message: 'User not authenticated' });
+        }
+        
+        const userId = auth.userId;
+        console.log('Fetching enrolled courses for user:', userId);
+        
+        const userData = await User.findById(userId).populate('enrolledCourses')
+        console.log('User found:', !!userData);
+        
+        if (!userData) {
+            console.log('❌ User not found in database:', userId);
+            console.log('This might be normal if user was just created via Clerk webhook');
+            
+            // Create user if doesn't exist (fallback)
+            console.log('Attempting to create user record...');
+            // But we don't have user details here, so just return empty array
+            return res.json({success: true, enrolledCourses: []})
+        }
+        
+        console.log('✅ User found in database');
+        console.log('Enrolled courses count:', userData?.enrolledCourses?.length || 0);
+        console.log('Enrolled course IDs:', userData.enrolledCourses.map(c => c._id));
+        
+        res.json({success: true, enrolledCourses: userData.enrolledCourses})
+    } catch (error) {
+        console.error('❌ Error in userEnrolledCourses:', error);
+        res.json({success: false, message: error.message})
     }
 }
 
 // Hàm tạo thanh toán MoMo
 export const createMomoPayment = async (req, res) => {
     try {
+        // Check authentication
+        if (typeof req.auth !== 'function') {
+            return res.json({ success: false, message: 'Authentication middleware not available' });
+        }
+        
+        const auth = req.auth();
+        if (!auth || !auth.userId) {
+            return res.json({ success: false, message: 'User not authenticated' });
+        }
+        
         const { courseId } = req.body
         const { origin } = req.headers
-        const userId = req.auth().userId
+        const userId = auth.userId;
         
         const userData = await User.findById(userId)
         const courseData = await Course.findById(courseId)
@@ -67,7 +125,7 @@ export const createMomoPayment = async (req, res) => {
         const orderId = partnerCode + new Date().getTime()
         const requestId = orderId
         const requestType = "payWithMethod"
-        const redirectUrl = `${origin}/loading/my-enrollments`
+        const redirectUrl = `${origin}/payment-status`
         const ipnUrl = `${process.env.BACKEND_URL}/momo-webhook`
         const extraData = Buffer.from(JSON.stringify({ purchaseId: newPurchase._id.toString() })).toString('base64')
         const lang = 'vi'
@@ -140,6 +198,8 @@ export const createMomoPayment = async (req, res) => {
             req.end()
         })
 
+        console.log('✅ Payment URL generated:', paymentUrl);
+        
         res.json({ 
             success: true, 
             payment_url: paymentUrl,
@@ -154,7 +214,17 @@ export const createMomoPayment = async (req, res) => {
 
 export const updateUserCourseProgress = async (req,res)=>{
     try {
-        const userId = req.auth().userId
+        // Check authentication
+        if (typeof req.auth !== 'function') {
+            return res.json({ success: false, message: 'Authentication middleware not available' });
+        }
+        
+        const auth = req.auth();
+        if (!auth || !auth.userId) {
+            return res.json({ success: false, message: 'User not authenticated' });
+        }
+        
+        const userId = auth.userId;
         const {courseId, lectureId} = req.body
         const progressData = await CourseProgress.findOne({userId, courseId})
 
@@ -180,7 +250,17 @@ export const updateUserCourseProgress = async (req,res)=>{
 
 export const getUserCourseProgress = async (req, res) =>{
     try {
-        const userId = req.auth().userId
+        // Check authentication
+        if (typeof req.auth !== 'function') {
+            return res.json({ success: false, message: 'Authentication middleware not available' });
+        }
+        
+        const auth = req.auth();
+        if (!auth || !auth.userId) {
+            return res.json({ success: false, message: 'User not authenticated' });
+        }
+        
+        const userId = auth.userId;
         const {courseId} = req.body
         const progressData = await CourseProgress.findOne({userId, courseId})
         res.json({success: true, progressData})
@@ -191,19 +271,31 @@ export const getUserCourseProgress = async (req, res) =>{
 }
 
 export const addUserRating = async (req, res) =>{
-    const userId = req.auth().userId
-    const { courseId, rating } = req.body;
-    if (!courseId || !userId || !rating || rating < 1 || rating > 5){
-        return res.json({success: false, message: 'InValid Details'})
-    }
     try {
+        // Check authentication
+        if (typeof req.auth !== 'function') {
+            return res.json({ success: false, message: 'Authentication middleware not available' });
+        }
+        
+        const auth = req.auth();
+        if (!auth || !auth.userId) {
+            return res.json({ success: false, message: 'User not authenticated' });
+        }
+        
+        const userId = auth.userId;
+        const { courseId, rating } = req.body;
+        
+        if (!courseId || !userId || !rating || rating < 1 || rating > 5){
+            return res.json({success: false, message: 'InValid Details'})
+        }
+        
         const course = await Course.findById(courseId);
         if(!course){
             return res.json({success: false, message: 'Course not found.'})
         }
 
         const user = await User.findById(userId)
-        if(!user || !user.enrolledCourses.includes(courseId)){ // Sửa lỗi logic ở đây
+        if(!user || !user.enrolledCourses.some(enrolledCourseId => enrolledCourseId.toString() === courseId)){
             return res.json({ success: false , message: 'User has not purchased this course.'})
         }
 
@@ -219,5 +311,38 @@ export const addUserRating = async (req, res) =>{
 
     } catch(error) {
         return res.json({success: false, message: error.message})
+    }
+}
+
+// Thêm endpoint để refresh enrolled courses
+export const refreshEnrolledCourses = async (req, res) => {
+    try {
+        // Check authentication
+        if (typeof req.auth !== 'function') {
+            return res.json({ success: false, message: 'Authentication middleware not available' });
+        }
+        
+        const auth = req.auth();
+        if (!auth || !auth.userId) {
+            return res.json({ success: false, message: 'User not authenticated' });
+        }
+        
+        const userId = auth.userId;
+        console.log('=== REFRESH ENROLLED COURSES ===');
+        console.log('Refreshing enrolled courses for user:', userId);
+        
+        const userData = await User.findById(userId).populate('enrolledCourses')
+        
+        if (!userData) {
+            return res.json({success: false, message: 'User not found'})
+        }
+        
+        console.log('✅ Refreshed enrolled courses');
+        console.log('Enrolled courses count:', userData?.enrolledCourses?.length || 0);
+        
+        res.json({success: true, enrolledCourses: userData.enrolledCourses})
+    } catch (error) {
+        console.error('❌ Error in refreshEnrolledCourses:', error);
+        res.json({success: false, message: error.message})
     }
 }

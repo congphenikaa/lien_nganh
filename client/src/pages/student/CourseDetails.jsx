@@ -21,7 +21,7 @@ const CourseDetails = () => {
   const [playerData, setPlayerData] = useState(null)
 
 
-  const {allCourses, calculateRating, calculateChapterTime, 
+  const {calculateRating, calculateChapterTime, 
     calculateNoOfLectures, calculateCourseDuration, currency, backendUrl, userData, getToken} = useContext(AppContext);
 
   const fetchCourseData = async () => {

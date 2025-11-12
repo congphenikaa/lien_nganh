@@ -6,7 +6,9 @@ import CourseDetails from './pages/student/CourseDetails.jsx'
 import MyEnrollments from './pages/student/MyEnrollments.jsx'
 import Player from './pages/student/Player.jsx'
 import Loading from './components/student/Loading.jsx'
+import PaymentStatus from './pages/student/PaymentStatus.jsx'
 import BecomeEducator from './pages/student/BecomeEducator.jsx'
+import TestAuth from './pages/TestAuth.jsx'
 import Educator from './pages/educator/Educator.jsx'
 import Dashboard from './pages/educator/Dashboard.jsx'
 import AddCourse from './pages/educator/AddCourse.jsx'
@@ -23,6 +25,7 @@ import CourseManagement from './components/admin/CourseManagement.jsx'
 import RevenueManagement from './components/admin/RevenueManagement.jsx'
 
 import RatingManagement from './components/admin/RatingManagement.jsx'
+
 
 import "quill/dist/quill.snow.css";
 import {ToastContainer} from 'react-toastify'
@@ -44,6 +47,8 @@ const App = () => {
         <Route path='/my-enrollments' element={<MyEnrollments />} />
         <Route path='/player/:courseId' element={<Player />} />
         <Route path='/loading/:path' element={<Loading />} />
+        <Route path='/payment-status' element={<PaymentStatus />} />
+        <Route path='/test-auth' element={<TestAuth />} />
         <Route path='/become-educator' element={<BecomeEducator />} />
         
         {/* Educator Routes */}

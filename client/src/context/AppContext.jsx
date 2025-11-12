@@ -35,7 +35,18 @@ export const AppContextProvider = (props) => {
       }
     }
 
-    const fetchUserData = async ()=> {
+    const fetchUserData = async (retryCount = 0) => {
+      console.log('=== FETCH USER DATA IN CONTEXT ===');
+      console.log('User available:', !!user);
+      console.log('Backend URL:', backendUrl);
+      console.log('Retry attempt:', retryCount);
+      
+      // Wait for user to be fully loaded
+      if (!user) {
+        console.log('❌ User not available, skipping fetch');
+        return;
+      }
+      
       // Check user role and set flags safely
       if(user && user.publicMetadata && user.publicMetadata.role){
         const role = user.publicMetadata.role
@@ -48,14 +59,61 @@ export const AppContextProvider = (props) => {
       }
       
       try {
+        // Wait a bit for token to be ready
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
         const token = await getToken();
+        console.log('Token available:', !!token);
+        console.log('Token length:', token ? token.length : 0);
+        console.log('Token starts with:', token ? token.substring(0, 20) + '...' : 'null');
+        
+        if (!token || token.length < 10) {
+          console.error('❌ Invalid or missing token');
+          
+          // Retry with longer wait for token
+          if (retryCount < 3) {
+            console.log(`🔄 Retrying for token in ${(retryCount + 1) * 500}ms...`);
+            setTimeout(() => {
+              fetchUserData(retryCount + 1);
+            }, (retryCount + 1) * 500);
+            return;
+          }
+          
+          throw new Error('No valid authentication token available');
+        }
+        
         const {data} = await axios.get(backendUrl + '/api/user/data',{headers:{Authorization: `Bearer ${token}`}})
+        console.log('API Response:', data);
+        
         if(data.success){
           setUserData(data.user)
+          console.log('✅ User data set successfully:', data.user.name);
         }else{
+          console.error('❌ API returned error:', data.message);
+          
+          // Retry up to 3 times with increasing delay
+          if(retryCount < 3 && data.message === 'User not authenticated') {
+            console.log(`🔄 Retrying fetchUserData in ${(retryCount + 1) * 1000}ms...`);
+            setTimeout(() => {
+              fetchUserData(retryCount + 1);
+            }, (retryCount + 1) * 1000);
+            return;
+          }
+          
           toast.error(data.message)
         }
       } catch (error) {
+        console.error('❌ Error fetching user data:', error);
+        
+        // Retry on network errors too
+        if(retryCount < 3) {
+          console.log(`🔄 Retrying fetchUserData on error in ${(retryCount + 1) * 1000}ms...`);
+          setTimeout(() => {
+            fetchUserData(retryCount + 1);
+          }, (retryCount + 1) * 1000);
+          return;
+        }
+        
         toast.error(error.message)
       }
     }
@@ -106,12 +164,14 @@ export const AppContextProvider = (props) => {
       try {
         const token = await getToken();
         const {data} = await axios.get(backendUrl + '/api/user/enrolled-courses',{headers: {Authorization: `Bearer ${token}`}})
+        
         if(data.success){
           setEnrolledCourses(data.enrolledCourses.reverse())
         }else{
           toast.error(data.message)
         }
       } catch (error) {
+        console.error('Error fetching enrolled courses:', error);
         toast.error(error.message)
       }
 
@@ -119,18 +179,48 @@ export const AppContextProvider = (props) => {
 
     useEffect(()=>{
       fetchAllCourses()
-    },[])
+    },[]) // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(()=>{
+      console.log('=== USEEFFECT TRIGGERED ===');
+      console.log('User changed:', !!user);
+      console.log('User ID:', user?.id);
+      
       if(user){
-        fetchUserData(),
-        fetchUserEnrolledCourses()
+        console.log('Calling fetchUserData...');
+        // Add delay to ensure user is fully loaded
+        setTimeout(() => {
+          fetchUserData()
+          fetchUserEnrolledCourses()
+        }, 100)
       }
-    },[user])
+    },[user]) // eslint-disable-line react-hooks/exhaustive-deps
+    
+    // Additional effect to force fetch when userData is null but user exists
+    useEffect(() => {
+      if (user && !userData) {
+        console.log('=== FORCE FETCH: User exists but userData is null ===');
+        setTimeout(() => {
+          fetchUserData()
+        }, 500)
+      }
+    }, [user, userData]) // eslint-disable-line react-hooks/exhaustive-deps
+    
+    // Backup mechanism - retry every 30s if userData is still null and user exists
+    useEffect(() => {
+      const interval = setInterval(() => {
+        if (user && !userData) {
+          console.log('=== BACKUP RETRY: Still no userData after 30s ===');
+          fetchUserData();
+        }
+      }, 30000); // 30 second intervals
+      
+      return () => clearInterval(interval);
+    }, [user, userData]) // eslint-disable-line react-hooks/exhaustive-deps
 
     const value = {
       currency, allCourses, navigate, calculateRating, isEducator, setIsEducator, isAdmin, setIsAdmin,
-      calculateChapterTime, calculateCourseDuration, calculateNoOfLectures, enrolledCourses, fetchUserEnrolledCourses, backendUrl, userData, setUserData, getToken, fetchAllCourses
+      calculateChapterTime, calculateCourseDuration, calculateNoOfLectures, enrolledCourses, fetchUserEnrolledCourses, backendUrl, userData, setUserData, getToken, fetchAllCourses, fetchUserData
     }
 
   return (
