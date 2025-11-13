@@ -6,27 +6,24 @@ import crypto from 'crypto'
 
 export const getUserData = async (req,res)=>{
     try {
-        const userId = req.auth().userId
+        const userId = req.auth.userId // Sửa từ req.auth().userId
         const user = await User.findById(userId)
         if(!user){
             return res.json({success: false, message: 'User Not Found'})
-
         }
         res.json({success: true, user})
     } catch (error) {
         res.json({success: false, message: error.message})
-        
     }
 }
 
 export const userEnrolledCourses = async (req, res) =>{
     try {
-        const userId = req.auth().userId
+        const userId = req.auth.userId // Sửa từ req.auth().userId
         const userData = await User.findById(userId).populate('enrolledCourses')
         res.json({success: true,enrolledCourses: userData.enrolledCourses})
     } catch (error) {
         res.json({success: false, message: error.message})
-        
     }
 }
 
@@ -291,7 +288,7 @@ export const handlePaymentCallback = async (req, res) => {
 
 export const updateUserCourseProgress = async (req,res)=>{
     try {
-        const userId = req.auth().userId
+        const userId = req.auth.userId // Sửa từ req.auth().userId
         const {courseId, lectureId} = req.body
         const progressData = await CourseProgress.findOne({userId, courseId})
 
@@ -317,18 +314,17 @@ export const updateUserCourseProgress = async (req,res)=>{
 
 export const getUserCourseProgress = async (req, res) =>{
     try {
-        const userId = req.auth().userId
+        const userId = req.auth.userId // Sửa từ req.auth().userId
         const {courseId} = req.body
         const progressData = await CourseProgress.findOne({userId, courseId})
         res.json({success: true, progressData})
     } catch (error) {
         res.json({success: false, message: error.message})
-        
     }
 }
 
 export const addUserRating = async (req, res) =>{
-    const userId = req.auth().userId
+    const userId = req.auth.userId // Sửa từ req.auth().userId
     const { courseId, rating } = req.body;
     if (!courseId || !userId || !rating || rating < 1 || rating > 5){
         return res.json({success: false, message: 'InValid Details'})
@@ -340,7 +336,7 @@ export const addUserRating = async (req, res) =>{
         }
 
         const user = await User.findById(userId)
-        if(!user || !user.enrolledCourses.includes(courseId)){ // Sửa lỗi logic ở đây
+        if(!user || !user.enrolledCourses.includes(courseId)){
             return res.json({ success: false , message: 'User has not purchased this course.'})
         }
 

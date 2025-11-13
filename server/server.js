@@ -2,13 +2,13 @@ import express from'express'
 import cors from 'cors'
 import 'dotenv/config'
 import connectDB from './configs/mongodb.js'
-import { clerkWebhooks, momoWebhooks } from './controllers/webhooks.js' // Thêm momoWebhooks
+import { clerkWebhooks } from './controllers/webhooks.js'
 import educatorRouter from './routes/educatorRoutes.js'
 import adminRouter from './routes/adminRoutes.js'
 import { clerkMiddleware } from '@clerk/express'
 import connectCloudinary from './configs/cloudinary.js'
 import courseRouter from './routes/courseRoute.js'
-import userRouter from './routes/userRoutes.js'
+import userRouter from './routes/userRoutes.js' 
 import { autoCleanupOldRequests } from './controllers/adminController.js'
 
 //Initialize Express
@@ -26,12 +26,10 @@ app.use(clerkMiddleware())
 app.get('/', (req, res)=> res.send("API Working"))
 
 app.post('/clerk', express.json(), clerkWebhooks)
-//app.post('/api/momo-webhook', express.json(), momoWebhooks);
 app.use('/api/educator',express.json(), educatorRouter)
 app.use('/api/admin', express.json(), adminRouter)
 app.use('/api/course', express.json(), courseRouter)
-app.use('/api/user', express.json(), userRouter)
-
+app.use('/api/user', express.json(), userRouter) // MOUNT USER ROUTER
 
 //Port
 const PORT = process.env.PORT || 5000
