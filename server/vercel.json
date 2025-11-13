@@ -10,7 +10,7 @@
         {
             "src": "/api/payment/callback",
             "dest": "/server.js",
-            "methods": ["GET"]
+            "methods": ["GET", "POST"]
         },
         {
             "src": "/(.*)",

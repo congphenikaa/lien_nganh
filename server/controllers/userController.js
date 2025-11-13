@@ -162,7 +162,7 @@ export const handlePaymentCallback = async (req, res) => {
       orderId, 
       transId, 
       amount,
-      extraData
+      extraData // purchaseId nằm trong extraData
     } = req.query;
     
     console.log('🎯 PARSED PARAMETERS:', { 
@@ -177,11 +177,18 @@ export const handlePaymentCallback = async (req, res) => {
     let purchaseId;
     try {
       if (extraData) {
-        // 🚨 SỬA: MoMo gửi extraData đã được URL encoded
-        const decodedExtraData = decodeURIComponent(extraData);
-        console.log('📦 DECODED EXTRADATA STRING:', decodedExtraData);
+        console.log('📦 EXTRADATA RAW:', extraData);
         
-        const parsedData = JSON.parse(decodedExtraData);
+        // 🚨 QUAN TRỌNG: MoMo gửi extraData đã được URL encoded 2 lần
+        // First decode: %257B -> %7B, %2522 -> %22
+        const firstDecode = decodeURIComponent(extraData);
+        console.log('📦 EXTRADATA FIRST DECODE:', firstDecode);
+        
+        // Second decode: %7B -> {, %22 -> "
+        const secondDecode = decodeURIComponent(firstDecode);
+        console.log('📦 EXTRADATA SECOND DECODE:', secondDecode);
+        
+        const parsedData = JSON.parse(secondDecode);
         purchaseId = parsedData.purchaseId;
         console.log('🎯 PURCHASE ID FROM EXTRADATA:', purchaseId);
       }
@@ -216,6 +223,7 @@ export const handlePaymentCallback = async (req, res) => {
       // THANH TOÁN THÀNH CÔNG
       console.log('🎉 PAYMENT SUCCESS - PROCESSING ENROLLMENT...');
       
+      // Nếu đã xử lý rồi thì không xử lý lại
       if (purchase.status === 'completed') {
         console.log('ℹ️ PURCHASE ALREADY COMPLETED, REDIRECTING...');
         return res.redirect(`${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/my-enrollments?success=true`);
@@ -252,35 +260,53 @@ export const handlePaymentCallback = async (req, res) => {
       console.log('📚 COURSE FOUND:', course.courseTitle);
 
       // Kiểm tra và thêm enrollment
-      if (!user.enrolledCourses.includes(courseId)) {
+      const isUserEnrolled = user.enrolledCourses.includes(courseId);
+      const isCourseEnrolled = course.enrolledStudents.includes(userId);
+
+      console.log('📊 ENROLLMENT STATUS:', {
+        isUserEnrolled,
+        isCourseEnrolled
+      });
+
+      if (!isUserEnrolled) {
         user.enrolledCourses.push(courseId);
         await user.save();
         console.log('✅ ADDED COURSE TO USER ENROLLMENTS');
+      } else {
+        console.log('ℹ️ USER ALREADY ENROLLED IN THIS COURSE');
       }
 
-      if (!course.enrolledStudents.includes(userId)) {
+      if (!isCourseEnrolled) {
         course.enrolledStudents.push(userId);
         await course.save();
         console.log('✅ ADDED USER TO COURSE STUDENTS');
+      } else {
+        console.log('ℹ️ USER ALREADY IN COURSE STUDENTS LIST');
       }
 
       console.log('🎉🎉🎉 ENROLLMENT COMPLETED SUCCESSFULLY!');
+      console.log('🔄 REDIRECTING TO FRONTEND...');
+      
+      // Redirect đến trang thành công
       return res.redirect(`${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/my-enrollments?success=true&courseId=${courseId}`);
       
     } else {
       // THANH TOÁN THẤT BẠI
       console.log('❌ PAYMENT FAILED:', message);
       
+      // Cập nhật purchase status
       purchase.status = 'failed';
       purchase.transactionId = transId;
       await purchase.save();
       
-      return res.redirect(`${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/payment-error?message=${encodeURIComponent(message || 'Payment failed')}`);
+      console.log('🔄 REDIRECTING TO ERROR PAGE...');
+      return res.redirect(`${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/payment-error?message=${encodeURIComponent(message || 'Payment failed')}&purchaseId=${purchaseId}`);
     }
 
   } catch (error) {
     console.error('💥 CALLBACK ERROR:', error);
-    return res.redirect(`${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/payment-error?message=Internal server error`);
+    console.error('💥 ERROR STACK:', error.stack);
+    return res.redirect(`${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/payment-error?message=Internal server error&error=${encodeURIComponent(error.message)}`);
   }
 };
 

@@ -19,13 +19,30 @@ await connectCloudinary()
 app.use(cors())
 app.use(clerkMiddleware())
 
-// 🚨 THÊM MIDDLEWARE ĐỂ XỬ LÝ URL ENCODED (QUAN TRỌNG CHO MOMO CALLBACK)
+// 🚨 QUAN TRỌNG: Thêm middleware để xử lý URL encoded data
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// 🚨 ĐỊNH NGHĨA ROUTE CALLBACK TRỰC TIẾP Ở ĐÂY
+// 🚨 ROUTE CALLBACK - PHẢI ĐỊNH NGHĨA TRƯỚC CÁC ROUTE KHÁC
 app.get('/api/payment/callback', async (req, res) => {
-  console.log('✅ PAYMENT CALLBACK HIT!');
+  console.log('✅ PAYMENT CALLBACK HIT VIA GET!');
+  console.log('📧 FULL QUERY:', req.query);
+  console.log('🔍 QUERY PARAMS:', Object.keys(req.query));
+  
+  try {
+    // Import dynamic để tránh lỗi circular dependency
+    const { handlePaymentCallback } = await import('./controllers/userController.js');
+    await handlePaymentCallback(req, res);
+  } catch (error) {
+    console.error('💥 CALLBACK IMPORT ERROR:', error);
+    res.redirect(`${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/payment-error?message=Callback processing error`);
+  }
+});
+
+// 🚨 THÊM POST METHOD ĐỂ CHẮC CHẮN
+app.post('/api/payment/callback', async (req, res) => {
+  console.log('✅ PAYMENT CALLBACK HIT VIA POST!');
+  console.log('📧 FULL BODY:', req.body);
   console.log('📧 FULL QUERY:', req.query);
   
   try {
@@ -33,18 +50,18 @@ app.get('/api/payment/callback', async (req, res) => {
     await handlePaymentCallback(req, res);
   } catch (error) {
     console.error('💥 CALLBACK IMPORT ERROR:', error);
-    res.redirect(`${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/payment-error?message=Callback error`);
+    res.redirect(`${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/payment-error?message=Callback processing error`);
   }
+});
+
+// Route tạm cho webhook
+app.post('/api/momo-webhook', express.json(), (req, res) => {
+  console.log('🔔 MOMO WEBHOOK RECEIVED (TEMPORARY)');
+  res.status(200).json({ success: true });
 });
 
 app.get('/', (req, res)=> res.send("API Working"))
 app.post('/clerk', express.json(), clerkWebhooks)
-app.post('/api/momo-webhook', express.json(), (req, res) => {
-  console.log('🔔 MOMO WEBHOOK RECEIVED (TEMPORARY)');
-  console.log('📦 WEBHOOK BODY:', req.body);
-  // Luôn trả về 200 để MoMo không retry
-  res.status(200).json({ success: true });
-});
 app.use('/api/educator', educatorRouter)
 app.use('/api/admin', adminRouter)
 app.use('/api/course', courseRouter)
@@ -55,12 +72,7 @@ const PORT = process.env.PORT || 5000
 app.listen(PORT, ()=>{
     console.log(`Server is running on port ${PORT}`)
     
-    // Auto cleanup old educator requests every 24 hours
-    const cleanupInterval = 24 * 60 * 60 * 1000 // 24 hours in milliseconds
+    const cleanupInterval = 24 * 60 * 60 * 1000
     setInterval(autoCleanupOldRequests, cleanupInterval)
-    
-    // Run cleanup once when server starts
     autoCleanupOldRequests()
-    
-    console.log('Auto cleanup for old educator requests is scheduled every 24 hours')
 })
