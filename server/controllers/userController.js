@@ -3,7 +3,6 @@ import { Purchase } from "../models/Purchase.js"
 import { CourseProgress } from "../models/CourseProgress.js"
 import Course from "../models/Course.js"
 import crypto from 'crypto'
-import https from 'https'
 
 export const getUserData = async (req,res)=>{
     try {
