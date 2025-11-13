@@ -22,8 +22,8 @@ app.use(clerkMiddleware())
 
 app.get('/', (req, res)=> res.send("API Working"))
 
-app.get('/api/user/payment-callback', handlePaymentCallback)
-
+app.get('/api/payment/callback', handlePaymentCallback)
+app.post('/api/payment/callback', handlePaymentCallback)
 app.post('/api/momo-webhook', express.json(), momoWebhooks)
 
 // Các router khác

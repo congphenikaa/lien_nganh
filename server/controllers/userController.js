@@ -82,7 +82,7 @@ export const createMomoPayment = async (req, res) => {
     const requestId = partnerCode + new Date().getTime();
     const orderId = requestId;
     const orderInfo = `Payment for course: ${course.courseTitle}`;
-    const redirectUrl = `${process.env.BACKEND_URL || 'https://lms-backend-c9mslf3m8-congs-projects-1d5257dc.vercel.app'}/api/user/payment-callback`;
+    const redirectUrl = `${process.env.BACKEND_URL || 'https://lms-backend-c9mslf3m8-congs-projects-1d5257dc.vercel.app'}/api/payment/callback`;
     const ipnUrl = `${process.env.BACKEND_URL || 'https://lms-backend-c9mslf3m8-congs-projects-1d5257dc.vercel.app'}/api/momo-webhook`;
     const amount = course.coursePrice.toString();
     const requestType = "payWithMethod";
