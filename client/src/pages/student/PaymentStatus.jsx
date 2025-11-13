@@ -11,7 +11,7 @@ const PaymentStatus = () => {
 
   useEffect(() => {
     const resultCode = searchParams.get('resultCode')
-    const message = searchParams.get('message')
+    const message = searchParams.get('message') 
     
     console.log('Payment status params:', { resultCode, message })
 
@@ -54,7 +54,7 @@ const PaymentStatus = () => {
         navigate('/')
       }, 3000)
     }
-  }, [searchParams, navigate, fetchUserEnrolledCourses])
+  }, [])
 
   return (
     <div className='min-h-screen flex items-center justify-center'>

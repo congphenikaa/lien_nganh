@@ -93,9 +93,9 @@ export const momoWebhooks = async (req, res) => {
         console.log('Raw signature string:', rawSignature);
 
         // Tạm thời bỏ qua việc xác thực signature để test
-        // if (signature !== expected Signature) {
-        //     console.log('Invalid signature');
-        //     return res.status(400).json({ error: 'Invalid signature' });
+        // if (signature !== expected Signature) { // <-- Có lỗi typo ở đây, phải là expectedSignature
+        //     console.log('Invalid signature');
+        //     return res.status(400).json({ error: 'Invalid signature' });
         // }
 
         // Xử lý kết quả thanh toán
@@ -112,6 +112,12 @@ export const momoWebhooks = async (req, res) => {
                     console.log('Purchase not found:', purchaseId);
                     return res.status(200).json({ success: false, message: 'Purchase not found' });
                 }
+
+                // Kiểm tra xem đơn hàng đã được xử lý chưa
+                if (purchaseData.status === 'completed') {
+                    console.log('ℹ️ Purchase already processed:', purchaseId);
+                    return res.status(200).json({ success: true, message: 'Already processed' });
+                }
                 
                 console.log('User ID:', purchaseData.userId);
                 console.log('Course ID:', purchaseData.courseId.toString());
@@ -119,14 +125,20 @@ export const momoWebhooks = async (req, res) => {
                 const userData = await User.findById(purchaseData.userId);
                 const courseData = await Course.findById(purchaseData.courseId);
 
-                // Cập nhật thông tin
-                courseData.enrolledStudents.push(userData);
-                await courseData.save();
+                // --- SỬA LỖI LOGIC TỪ ĐÂY ---
+
+                // ❌ XÓA BỎ 2 DÒNG GÂY LỖI:
+                // courseData.enrolledStudents.push(userData);
+                // await courseData.save();
 
                 // Kiểm tra xem đã enroll chưa để tránh duplicate
                 const courseIdStr = purchaseData.courseId.toString();
+                const userIdStr = purchaseData.userId.toString(); // Clerk ID đã là string, nhưng để cho chắc
+                
                 const isAlreadyEnrolled = userData.enrolledCourses.some(courseId => courseId.toString() === courseIdStr);
-                const isStudentInCourse = courseData.enrolledStudents.includes(purchaseData.userId);
+                
+                // ✅ SỬA LỖI 1: Sửa lại cách kiểm tra `isStudentInCourse`
+                const isStudentInCourse = courseData.enrolledStudents.some(studentId => studentId.toString() === userIdStr);
 
                 console.log('Course ID to add:', courseIdStr);
                 console.log('User enrolled courses:', userData.enrolledCourses.map(c => c.toString()));
@@ -141,6 +153,7 @@ export const momoWebhooks = async (req, res) => {
                     console.log('ℹ️ User already enrolled in this course');
                 }
 
+                // ✅ SỬA LỖI 2: Chỉ push `userId` (là string), không push `userData` (object)
                 if (!isStudentInCourse) {
                     courseData.enrolledStudents.push(purchaseData.userId);
                     await courseData.save();
@@ -149,7 +162,9 @@ export const momoWebhooks = async (req, res) => {
                     console.log('ℹ️ User already in course enrolledStudents');
                 }
 
-                // Cập nhật purchase status
+                // --- KẾT THÚC SỬA LỖI ---
+
+                // Cập nhật purchase status (chỉ làm sau khi đã ghi danh)
                 purchaseData.status = 'completed';
                 purchaseData.transactionId = transId;
                 purchaseData.orderId = orderId;
@@ -170,7 +185,7 @@ export const momoWebhooks = async (req, res) => {
                 const purchaseId = decodedExtraData.purchaseId;
 
                 const purchaseData = await Purchase.findById(purchaseId);
-                if (purchaseData) {
+                if (purchaseData && purchaseData.status !== 'completed') { // Chỉ cập nhật nếu chưa thành công
                     purchaseData.status = 'failed';
                     purchaseData.transactionId = transId;
                     purchaseData.orderId = orderId;
