@@ -80,7 +80,7 @@ export const createMomoPayment = async (req, res) => {
         const requestId = orderId
         const requestType = "payWithMethod"
         const redirectUrl = `${origin}/loading/my-enrollments`
-        const ipnUrl = `${process.env.BACKEND_URL}/api/momo-webhook`
+        const ipnUrl = `${process.env.BACKEND_URL || 'https://lms-backend-iota-ten.vercel.app'}/api/momo-webhook`
         const extraData = Buffer.from(JSON.stringify({ 
             purchaseId: newPurchase._id.toString(),
             userId: userId,
