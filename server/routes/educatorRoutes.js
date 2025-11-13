@@ -8,8 +8,6 @@ const educatorRouter = express.Router()
 // Educator request routes
 educatorRouter.post('/request', submitEducatorRequest)
 educatorRouter.get('/request-status', getEducatorRequestStatus)
-
-// Educator functionality routes (protected)
 educatorRouter.post('/add-course', protectEducator, upload.single('image'), addCourse)
 educatorRouter.get('/courses', protectEducator, getEducatorCourses)
 educatorRouter.get('/dashboard', protectEducator, educatorDashboardData)

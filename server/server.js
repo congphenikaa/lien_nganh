@@ -10,6 +10,7 @@ import connectCloudinary from './configs/cloudinary.js'
 import courseRouter from './routes/courseRoute.js'
 import userRouter from './routes/userRoutes.js' 
 import { autoCleanupOldRequests } from './controllers/adminController.js'
+import { handlePaymentCallback } from './controllers/userController.js'
 
 //Initialize Express
 const app = express()
@@ -24,6 +25,8 @@ app.use(clerkMiddleware())
 
 //Routes
 app.get('/', (req, res)=> res.send("API Working"))
+
+app.get('/api/user/payment-callback', handlePaymentCallback)
 
 app.post('/clerk', express.json(), clerkWebhooks)
 app.use('/api/educator',express.json(), educatorRouter)
