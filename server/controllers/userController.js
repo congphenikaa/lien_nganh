@@ -31,50 +31,70 @@ export const userEnrolledCourses = async (req, res) =>{
     }
 }
 
-// Hàm tạo thanh toán MoMo
 export const createMomoPayment = async (req, res) => {
     try {
         const { courseId } = req.body
         const { origin } = req.headers
         const userId = req.auth().userId
         
+        console.log('🔄 STARTING MOMO PAYMENT:', { userId, courseId, origin });
+
         const userData = await User.findById(userId)
         const courseData = await Course.findById(courseId)
 
         if (!userData || !courseData) {
+            console.log('❌ USER OR COURSE NOT FOUND');
             return res.json({ success: false, message: 'Data Not Found' })
         }
 
         // Tính toán số tiền
         const amount = Math.floor(courseData.coursePrice - (courseData.discount * courseData.coursePrice / 100));
+        
+        console.log('💰 CALCULATED AMOUNT:', amount);
 
         // Tạo purchase record
         const purchaseData = {
             courseId: courseData._id,
             userId,
             amount: amount,
-            paymentMethod: 'momo'
+            paymentMethod: 'momo',
+            status: 'pending'
         }
 
         const newPurchase = await Purchase.create(purchaseData)
+        console.log('📝 PURCHASE RECORD CREATED:', newPurchase._id);
 
         // Thông tin MoMo
-        const accessKey = process.env.MOMO_ACCESS_KEY || 'F8BBA842ECF85'
-        const secretKey = process.env.MOMO_SECRET_KEY || 'K951B6PE1waDMi640xX08PD3vg6EkVlz'
-        const partnerCode = process.env.MOMO_PARTNER_CODE || 'MOMO'
+        const accessKey = process.env.MOMO_ACCESS_KEY
+        const secretKey = process.env.MOMO_SECRET_KEY
+        const partnerCode = process.env.MOMO_PARTNER_CODE
         
+        // KIỂM TRA ENV VARIABLES
+        if (!accessKey || !secretKey || !partnerCode) {
+            console.error('❌ MOMO ENV VARIABLES MISSING');
+            return res.json({ success: false, message: 'Payment configuration error' })
+        }
+
         const orderInfo = `Thanh toán khóa học: ${courseData.courseTitle}`
         const orderId = partnerCode + new Date().getTime()
         const requestId = orderId
         const requestType = "payWithMethod"
         const redirectUrl = `${origin}/loading/my-enrollments`
-        const ipnUrl = `${process.env.BACKEND_URL}/api/momo-webhook`;
-        const extraData = Buffer.from(JSON.stringify({ purchaseId: newPurchase._id.toString() })).toString('base64')
+        const ipnUrl = `${process.env.BACKEND_URL}/api/momo-webhook`
+        const extraData = Buffer.from(JSON.stringify({ 
+            purchaseId: newPurchase._id.toString(),
+            userId: userId,
+            courseId: courseId
+        })).toString('base64')
         const lang = 'vi'
 
-        // Tạo signature
+        console.log('🔗 WEBHOOK URL:', ipnUrl);
+
+        // Tạo signature - SỬA THEO ĐÚNG ĐỊNH DẠNG MOMO
         const rawSignature = `accessKey=${accessKey}&amount=${amount}&extraData=${extraData}&ipnUrl=${ipnUrl}&orderId=${orderId}&orderInfo=${orderInfo}&partnerCode=${partnerCode}&redirectUrl=${redirectUrl}&requestId=${requestId}&requestType=${requestType}`
         
+        console.log('📝 RAW SIGNATURE FOR CREATION:', rawSignature);
+
         const signature = crypto.createHmac('sha256', secretKey)
             .update(rawSignature)
             .digest('hex')
@@ -82,8 +102,8 @@ export const createMomoPayment = async (req, res) => {
         // Tạo request body
         const requestBody = JSON.stringify({
             partnerCode: partnerCode,
-            partnerName: "Your Company Name",
-            storeId: "YourStoreId",
+            partnerName: "E-Learning Platform",
+            storeId: "ElearningStore",
             requestId: requestId,
             amount: amount,
             orderId: orderId,
@@ -97,6 +117,8 @@ export const createMomoPayment = async (req, res) => {
             orderGroupId: "",
             signature: signature
         })
+
+        console.log('🚀 SENDING REQUEST TO MOMO...');
 
         // Gọi API MoMo
         const options = {
@@ -120,19 +142,24 @@ export const createMomoPayment = async (req, res) => {
                 
                 response.on('end', () => {
                     try {
+                        console.log('📨 MOMO RESPONSE:', data);
                         const result = JSON.parse(data)
                         if (result.resultCode === 0) {
+                            console.log('✅ PAYMENT URL CREATED SUCCESSFULLY');
                             resolve(result.payUrl)
                         } else {
-                            reject(new Error(result.message || 'Payment creation failed'))
+                            console.error('❌ MOMO API ERROR:', result);
+                            reject(new Error(result.message || `Payment creation failed: ${result.resultCode}`))
                         }
                     } catch (error) {
+                        console.error('❌ MOMO RESPONSE PARSE ERROR:', error);
                         reject(error)
                     }
                 })
             })
 
             req.on('error', (error) => {
+                console.error('❌ MOMO REQUEST ERROR:', error);
                 reject(error)
             })
 
@@ -140,6 +167,7 @@ export const createMomoPayment = async (req, res) => {
             req.end()
         })
 
+        console.log('🎯 PAYMENT FLOW COMPLETED, RETURNING URL TO CLIENT');
         res.json({ 
             success: true, 
             payment_url: paymentUrl,
@@ -147,7 +175,7 @@ export const createMomoPayment = async (req, res) => {
         })
 
     } catch (error) {
-        console.error('MoMo Payment Error:', error)
+        console.error('💥 MOMO PAYMENT ERROR:', error)
         res.json({ success: false, message: error.message })
     }
 }
