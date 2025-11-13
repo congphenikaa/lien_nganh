@@ -28,20 +28,15 @@ const MyEnrollments = () => {
     } catch (error) {
       toast.error(error.message)
     }
-  }, [enrolledCourses, backendUrl, getToken, calculateNoOfLectures])
-
-  useEffect(()=>{
-    if(userData){
-      fetchUserEnrolledCourses()
-    }
-  },[userData, fetchUserEnrolledCourses])
+  }, [enrolledCourses, backendUrl])
 
   // Auto refresh để đảm bảo courses được cập nhật sau thanh toán
   useEffect(()=>{
     const autoRefresh = async () => {
-      if(userData) {
-        await fetchUserEnrolledCourses()
-      }
+    if(userData) {
+            console.log('Auto-refreshing enrolled courses...'); // Thêm log để kiểm tra
+    await fetchUserEnrolledCourses()
+    }
     }
     
     // Refresh ngay khi component mount
@@ -49,14 +44,17 @@ const MyEnrollments = () => {
     
     // Auto refresh mỗi 10s trong 2 phút đầu để catch webhook updates
     const interval = setInterval(autoRefresh, 10000)
-    const timeout = setTimeout(() => clearInterval(interval), 120000) // 2 phút
+    const timeout = setTimeout(() => {
+          console.log('Stopping auto-refresh'); // Thêm log
+          clearInterval(interval)
+        }, 120000) // 2 phút
     
     return () => {
-      clearInterval(interval)
-      clearTimeout(timeout)
+    clearInterval(interval)
+    clearTimeout(timeout)
     }
-  }, [userData, fetchUserEnrolledCourses])
-
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+    }, [userData])
   useEffect(()=>{
     if(enrolledCourses.length > 0){
       getCourseProgress()
