@@ -20,15 +20,18 @@ await connectCloudinary()
 app.use(cors())
 app.use(clerkMiddleware())
 
+app.get('/', (req, res)=> res.send("API Working"))
+
 app.get('/api/user/payment-callback', handlePaymentCallback)
 
-app.get('/', (req, res)=> res.send("API Working"))
+app.post('/api/momo-webhook', express.json(), momoWebhooks)
+
+// Các router khác
 app.post('/clerk', express.json(), clerkWebhooks)
-app.use('/api/educator',express.json(), educatorRouter)
+app.use('/api/educator', express.json(), educatorRouter)
 app.use('/api/admin', express.json(), adminRouter)
 app.use('/api/course', express.json(), courseRouter)
-app.use('/api/user', express.json(), userRouter)
-app.post('/api/momo-webhook', express.json(), momoWebhooks)
+app.use('/api/user', express.json(), userRouter) 
 
 const PORT = process.env.PORT || 5000
 
