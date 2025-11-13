@@ -58,6 +58,10 @@ export const clerkWebhooks = async (req, res)=>{
 }
 
 export const momoWebhooks = async (req, res) => {
+    console.log('🔔🔔🔔 MOMO WEBHOOK TRIGGERED 🔔🔔🔔');
+    console.log('📦 Headers:', req.headers);
+    console.log('📦 Full Body:', JSON.stringify(req.body, null, 2));
+
     try {
         const { 
             partnerCode, 
@@ -75,125 +79,210 @@ export const momoWebhooks = async (req, res) => {
             signature 
         } = req.body;
 
-        console.log('MoMo Webhook received:', {
-            orderId, amount, resultCode, message, extraData
+        console.log('💰 PAYMENT DETAILS:', {
+            resultCode,
+            message, 
+            orderId,
+            amount,
+            transId,
+            extraData,
+            partnerCode
         });
 
         // Xác thực signature
-        const secretKey = process.env.MOMO_SECRET_KEY || 'K951B6PE1waDMi640xX08PD3vg6EkVlz';
+        const secretKey = process.env.MOMO_SECRET_KEY;
+        const accessKey = process.env.MOMO_ACCESS_KEY;
         
-        const rawSignature = `accessKey=${process.env.MOMO_ACCESS_KEY}&amount=${amount}&extraData=${extraData}&message=${message}&orderId=${orderId}&orderInfo=${orderInfo}&orderType=${orderType}&partnerCode=${partnerCode}&payType=${payType}&requestId=${requestId}&responseTime=${responseTime}&resultCode=${resultCode}&transId=${transId}`;
+        console.log('🔐 KEYS CHECK:', {
+            accessKey: accessKey ? '✅ SET' : '❌ MISSING',
+            secretKey: secretKey ? '✅ SET' : '❌ MISSING'
+        });
+
+        const rawSignature = `accessKey=${accessKey}&amount=${amount}&extraData=${extraData}&message=${message}&orderId=${orderId}&orderInfo=${orderInfo}&orderType=${orderType}&partnerCode=${partnerCode}&payType=${payType}&requestId=${requestId}&responseTime=${responseTime}&resultCode=${resultCode}&transId=${transId}`;
         
+        console.log('📝 RAW SIGNATURE:', rawSignature);
+
         const expectedSignature = crypto.createHmac('sha256', secretKey)
             .update(rawSignature)
             .digest('hex');
 
+        console.log('🔐 SIGNATURE COMPARISON:', {
+            received: signature,
+            expected: expectedSignature,
+            match: signature === expectedSignature
+        });
+
         if (signature !== expectedSignature) {
-            console.log('Invalid signature');
+            console.log('❌ SIGNATURE MISMATCH - Webhook rejected');
             return res.status(400).json({ error: 'Invalid signature' });
         }
 
+        console.log('✅ SIGNATURE VALIDATED');
+
         // Xử lý kết quả thanh toán
         if (resultCode === 0) {
-            // Thanh toán thành công
+            console.log('🎉 PAYMENT SUCCESSFUL - Starting enrollment process...');
+            
             try {
-                // Parse extraData an toàn
+                // Parse extraData
                 let purchaseId;
+                console.log('📦 EXTRA DATA RAW:', extraData);
+                
                 try {
-                    const decodedExtraData = JSON.parse(Buffer.from(extraData, 'base64').toString());
-                    purchaseId = decodedExtraData.purchaseId;
+                    const decodedExtraData = Buffer.from(extraData, 'base64').toString();
+                    console.log('📦 EXTRA DATA DECODED:', decodedExtraData);
+                    const parsedData = JSON.parse(decodedExtraData);
+                    purchaseId = parsedData.purchaseId;
+                    console.log('🎯 PURCHASE ID FROM WEBHOOK:', purchaseId);
                 } catch (parseError) {
-                    console.log('Error parsing extraData, trying direct parse:', extraData);
-                    // Thử parse trực tiếp nếu base64 fail
+                    console.error('❌ BASE64 PARSE ERROR:', parseError.message);
+                    // Thử parse trực tiếp
                     try {
+                        console.log('🔄 TRYING DIRECT JSON PARSE...');
                         const directParse = JSON.parse(extraData);
                         purchaseId = directParse.purchaseId;
+                        console.log('✅ PURCHASE ID FROM DIRECT PARSE:', purchaseId);
                     } catch (e) {
-                        console.log('Both parsing methods failed');
+                        console.error('❌ BOTH PARSING METHODS FAILED');
                         return res.status(200).json({ success: false, message: 'Invalid extraData format' });
                     }
                 }
 
-                console.log('Purchase ID from webhook:', purchaseId);
+                if (!purchaseId) {
+                    console.error('❌ PURCHASE ID IS NULL OR UNDEFINED');
+                    return res.status(200).json({ success: false, message: 'Missing purchaseId' });
+                }
 
                 // Tìm purchase record
+                console.log('🔍 SEARCHING FOR PURCHASE IN DATABASE:', purchaseId);
                 const purchaseData = await Purchase.findById(purchaseId);
+                
                 if (!purchaseData) {
-                    console.log('Purchase not found:', purchaseId);
+                    console.error('❌ PURCHASE NOT FOUND IN DATABASE');
                     return res.status(200).json({ success: false, message: 'Purchase not found' });
                 }
 
-                console.log('User ID:', purchaseData.userId);
-                console.log('Course ID:', purchaseData.courseId.toString());
+                console.log('📋 PURCHASE FOUND:', {
+                    id: purchaseData._id,
+                    currentStatus: purchaseData.status,
+                    userId: purchaseData.userId,
+                    courseId: purchaseData.courseId,
+                    amount: purchaseData.amount
+                });
 
+                // Tìm user và course
+                console.log('👤 SEARCHING FOR USER:', purchaseData.userId);
                 const userData = await User.findById(purchaseData.userId);
+                
+                console.log('📚 SEARCHING FOR COURSE:', purchaseData.courseId.toString());
                 const courseData = await Course.findById(purchaseData.courseId.toString());
 
+                console.log('✅ DATABASE RESULTS:', {
+                    userFound: !!userData,
+                    courseFound: !!courseData,
+                    userName: userData?.name,
+                    courseTitle: courseData?.courseTitle
+                });
+
                 if (!userData || !courseData) {
-                    console.log('User or Course not found');
+                    console.error('❌ USER OR COURSE NOT FOUND');
+                    // NHƯNG VẪN UPDATE STATUS PURCHASE
+                    purchaseData.status = 'completed';
+                    purchaseData.transactionId = transId;
+                    await purchaseData.save();
+                    console.log('⚠️ Updated purchase status but enrollment failed');
                     return res.status(200).json({ success: false, message: 'User or Course not found' });
                 }
 
-                // Kiểm tra xem user đã enrolled chưa
-                const isUserEnrolled = courseData.enrolledStudents.includes(userData._id);
-                const isCourseEnrolled = userData.enrolledCourses.includes(courseData._id);
-
-                if (!isUserEnrolled) {
-                    courseData.enrolledStudents.push(userData._id);
-                    await courseData.save();
-                    console.log('Added user to course enrolled students');
-                }
-
-                if (!isCourseEnrolled) {
-                    userData.enrolledCourses.push(courseData._id);
-                    await userData.save();
-                    console.log('Added course to user enrolled courses');
-                }
-
-                // Cập nhật purchase status
+                // QUAN TRỌNG: UPDATE STATUS TRƯỚC KHI XỬ LÝ ENROLLMENT
+                console.log('🔄 UPDATING PURCHASE STATUS TO "completed"...');
                 purchaseData.status = 'completed';
                 purchaseData.transactionId = transId;
                 await purchaseData.save();
+                console.log('✅ PURCHASE STATUS UPDATED SUCCESSFULLY');
 
-                console.log(`Payment successful for purchase: ${purchaseId}`);
-                
+                // Kiểm tra và thêm enrollment
+                console.log('🔍 CHECKING EXISTING ENROLLMENT...');
+                const isUserEnrolled = userData.enrolledCourses.includes(courseData._id);
+                const isCourseEnrolled = courseData.enrolledStudents.includes(userData._id);
+
+                console.log('📊 ENROLLMENT STATUS:', {
+                    userEnrolled: isUserEnrolled,
+                    courseEnrolled: isCourseEnrolled,
+                    userEnrolledCoursesCount: userData.enrolledCourses.length,
+                    courseEnrolledStudentsCount: courseData.enrolledStudents.length
+                });
+
+                if (!isUserEnrolled) {
+                    console.log('➕ ADDING COURSE TO USER ENROLLED COURSES...');
+                    userData.enrolledCourses.push(courseData._id);
+                    await userData.save();
+                    console.log('✅ USER ENROLLMENT UPDATED');
+                } else {
+                    console.log('ℹ️ USER ALREADY ENROLLED IN THIS COURSE');
+                }
+
+                if (!isCourseEnrolled) {
+                    console.log('➕ ADDING USER TO COURSE ENROLLED STUDENTS...');
+                    courseData.enrolledStudents.push(userData._id);
+                    await courseData.save();
+                    console.log('✅ COURSE ENROLLMENT UPDATED');
+                } else {
+                    console.log('ℹ️ USER ALREADY IN COURSE STUDENTS LIST');
+                }
+
+                console.log('🎉🎉🎉 ENROLLMENT PROCESS COMPLETED SUCCESSFULLY! 🎉🎉🎉');
+
             } catch (dbError) {
-                console.error('Database update error:', dbError);
-                return res.status(500).json({ error: 'Database update failed' });
+                console.error('💥 DATABASE UPDATE ERROR:', dbError);
+                console.error('💥 ERROR STACK:', dbError.stack);
+                console.error('💥 ERROR DETAILS:', {
+                    message: dbError.message,
+                    name: dbError.name
+                });
+                return res.status(200).json({ success: false, error: 'Database update failed' });
             }
         } else {
             // Thanh toán thất bại
+            console.log('❌ PAYMENT FAILED:', { resultCode, message });
             try {
                 let purchaseId;
                 try {
-                    const decodedExtraData = JSON.parse(Buffer.from(extraData, 'base64').toString());
-                    purchaseId = decodedExtraData.purchaseId;
+                    const decodedExtraData = Buffer.from(extraData, 'base64').toString();
+                    const parsedData = JSON.parse(decodedExtraData);
+                    purchaseId = parsedData.purchaseId;
                 } catch (parseError) {
                     try {
                         const directParse = JSON.parse(extraData);
                         purchaseId = directParse.purchaseId;
                     } catch (e) {
-                        console.log('Failed to parse extraData for failed payment');
+                        console.log('❌ Failed to parse extraData for failed payment');
                         return res.status(200).json({ success: false, message: 'Invalid extraData format' });
                     }
                 }
 
-                const purchaseData = await Purchase.findById(purchaseId);
-                if (purchaseData) {
-                    purchaseData.status = 'failed';
-                    purchaseData.transactionId = transId;
-                    await purchaseData.save();
-                    console.log(`Payment failed for purchase: ${purchaseId}`);
+                if (purchaseId) {
+                    const purchaseData = await Purchase.findById(purchaseId);
+                    if (purchaseData) {
+                        purchaseData.status = 'failed';
+                        purchaseData.transactionId = transId;
+                        await purchaseData.save();
+                        console.log(`❌ Payment failed - Purchase ${purchaseId} updated to failed`);
+                    }
                 }
             } catch (dbError) {
-                console.error('Database update error for failed payment:', dbError);
+                console.error('❌ Database update error for failed payment:', dbError);
             }
         }
 
+        // QUAN TRỌNG: LUÔN TRẢ VỀ 200 CHO MOMO
+        console.log('📤 SENDING 200 RESPONSE TO MOMO');
         res.status(200).json({ success: true });
 
     } catch (error) {
-        console.error('MoMo webhook error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        console.error('💥💥💥 UNEXPECTED WEBHOOK ERROR:', error);
+        console.error('💥💥💥 ERROR STACK:', error.stack);
+        // VẪN TRẢ VỀ 200 ĐỂ MOMO KHÔNG RETRY
+        res.status(200).json({ success: false, error: 'Internal server error' });
     }
 };
