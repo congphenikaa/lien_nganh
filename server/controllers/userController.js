@@ -63,21 +63,17 @@ export const createMomoPayment = async (req, res) => {
 
     console.log('📝 PURCHASE CREATED:', purchaseData._id);
 
-    // Tạo extraData
+    // 🚨 QUAN TRỌNG: Tạo extraData đúng cách
     const extraDataObject = {
       purchaseId: purchaseData._id.toString(),
       userId: userId,
       courseId: courseId
     };
     
-    const extraData = Buffer.from(JSON.stringify(extraDataObject)).toString('base64');
-
-    // 🚨 SỬA URL CALLBACK - sử dụng URL tuyệt đối
-    const baseUrl = process.env.BACKEND_URL || `https://${req.get('host')}`;
-    const redirectUrl = `${baseUrl}/api/user/payment-callback`;
-    const ipnUrl = `${baseUrl}/api/momo-webhook`;
-
-    console.log('🔗 CALLBACK URLs:', { redirectUrl, ipnUrl });
+    // Sử dụng encode đúng cho MoMo
+    const extraData = encodeURIComponent(JSON.stringify(extraDataObject));
+    
+    console.log('📦 EXTRADATA CREATED:', extraDataObject);
 
     // MoMo parameters
     const partnerCode = process.env.MOMO_PARTNER_CODE || "MOMO";
@@ -86,11 +82,18 @@ export const createMomoPayment = async (req, res) => {
     const requestId = partnerCode + new Date().getTime();
     const orderId = requestId;
     const orderInfo = `Payment for course: ${course.courseTitle}`;
+    const redirectUrl = `${process.env.BACKEND_URL || 'https://lms-backend-c9mslf3m8-congs-projects-1d5257dc.vercel.app'}/api/user/payment-callback`;
+    const ipnUrl = `${process.env.BACKEND_URL || 'https://lms-backend-c9mslf3m8-congs-projects-1d5257dc.vercel.app'}/api/momo-webhook`;
     const amount = course.coursePrice.toString();
     const requestType = "payWithMethod";
 
-    // Tạo signature
+    console.log('🔗 REDIRECT URL:', redirectUrl);
+    console.log('🔗 IPN URL:', ipnUrl);
+
+    // 🚨 Tạo signature với extraData đã encode
     const rawSignature = `accessKey=${accessKey}&amount=${amount}&extraData=${extraData}&ipnUrl=${ipnUrl}&orderId=${orderId}&orderInfo=${orderInfo}&partnerCode=${partnerCode}&redirectUrl=${redirectUrl}&requestId=${requestId}&requestType=${requestType}`;
+    
+    console.log('🔐 RAW SIGNATURE:', rawSignature);
     
     const signature = crypto.createHmac('sha256', secretKey)
       .update(rawSignature)
@@ -106,7 +109,7 @@ export const createMomoPayment = async (req, res) => {
       orderInfo,
       redirectUrl,
       ipnUrl,
-      extraData,
+      extraData, // Sử dụng extraData đã encode
       requestType,
       signature,
       lang: 'en'
@@ -153,27 +156,44 @@ export const handlePaymentCallback = async (req, res) => {
   
   try {
     const { 
-      purchaseId, 
       resultCode, 
       message, 
       orderId, 
       transId, 
       amount,
-      partnerCode,
-      orderInfo,
-      extraData
+      extraData // purchaseId nằm trong extraData
     } = req.query;
     
     console.log('🎯 PARSED PARAMETERS:', { 
-      purchaseId, 
       resultCode, 
       message,
       orderId,
-      transId
+      transId,
+      extraData
     });
+
+    // Parse extraData để lấy purchaseId
+    let purchaseId;
+    try {
+      if (extraData) {
+        const decodedExtraData = Buffer.from(extraData, 'base64').toString();
+        const parsedData = JSON.parse(decodedExtraData);
+        purchaseId = parsedData.purchaseId;
+        console.log('🎯 PURCHASE ID FROM EXTRADATA:', purchaseId);
+      }
+    } catch (error) {
+      console.error('❌ ERROR PARSING EXTRADATA:', error);
+    }
+
+    // Nếu không có purchaseId từ extraData, thử từ query parameter
+    if (!purchaseId && req.query.purchaseId) {
+      purchaseId = req.query.purchaseId;
+      console.log('🎯 PURCHASE ID FROM QUERY:', purchaseId);
+    }
 
     if (!purchaseId) {
       console.error('❌ MISSING PURCHASE ID');
+      console.error('📋 EXTRADATA CONTENT:', extraData);
       return res.redirect(`${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/payment-error?message=Invalid purchase ID`);
     }
 
