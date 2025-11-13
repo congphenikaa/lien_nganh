@@ -48,6 +48,15 @@ export const createMomoPayment = async (req, res) => {
       return res.status(404).json({ success: false, message: "Course not found" });
     }
 
+    // Kiểm tra xem user đã enrolled course này chưa
+    const user = await User.findById(userId);
+    if (user.enrolledCourses.includes(courseId)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "You are already enrolled in this course" 
+      });
+    }
+
     // Tạo purchase record
     const purchaseData = await Purchase.create({
       courseId,
@@ -74,12 +83,12 @@ export const createMomoPayment = async (req, res) => {
     const requestId = partnerCode + new Date().getTime();
     const orderId = requestId;
     const orderInfo = `Payment for course: ${course.courseTitle}`;
-    const redirectUrl = `${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/my-enrollments`;
+    const redirectUrl = `${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/payment-callback?purchaseId=${purchaseData._id}`;
     const ipnUrl = `${process.env.BACKEND_URL || 'https://lms-backend-c9mslf3m8-congs-projects-1d5257dc.vercel.app'}/api/momo-webhook`;
     const amount = course.coursePrice.toString();
     const requestType = "payWithMethod";
 
-    console.log('🔗 WEBHOOK URL:', ipnUrl);
+    console.log('🔗 REDIRECT URL:', redirectUrl);
 
     // Tạo signature
     const rawSignature = `accessKey=${accessKey}&amount=${amount}&extraData=${extraData}&ipnUrl=${ipnUrl}&orderId=${orderId}&orderInfo=${orderInfo}&partnerCode=${partnerCode}&redirectUrl=${redirectUrl}&requestId=${requestId}&requestType=${requestType}`;
@@ -138,6 +147,82 @@ export const createMomoPayment = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+export const handlePaymentCallback = async (req, res) => {
+  try {
+    const { purchaseId, resultCode, message } = req.query;
+    
+    console.log('🔄 PAYMENT CALLBACK:', { purchaseId, resultCode, message });
+
+    if (!purchaseId) {
+      return res.redirect(`${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/payment-error?message=Invalid purchase ID`);
+    }
+
+    // Tìm purchase record
+    const purchase = await Purchase.findById(purchaseId);
+    if (!purchase) {
+      return res.redirect(`${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/payment-error?message=Purchase not found`);
+    }
+
+    // Kiểm tra kết quả thanh toán
+    if (resultCode === '0') {
+      // THANH TOÁN THÀNH CÔNG
+      console.log('🎉 PAYMENT SUCCESS - PROCESSING ENROLLMENT...');
+      
+      // Cập nhật purchase status
+      purchase.status = 'completed';
+      await purchase.save();
+      
+      // Thực hiện enrollment
+      const { userId, courseId } = purchase;
+
+      const [user, course] = await Promise.all([
+        User.findById(userId),
+        Course.findById(courseId)
+      ]);
+
+      if (!user || !course) {
+        console.error('❌ USER OR COURSE NOT FOUND');
+        return res.redirect(`${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/payment-error?message=User or course not found`);
+      }
+
+      // Kiểm tra và thêm enrollment
+      const isUserEnrolled = user.enrolledCourses.includes(courseId);
+      const isCourseEnrolled = course.enrolledStudents.includes(userId);
+
+      if (!isUserEnrolled) {
+        user.enrolledCourses.push(courseId);
+        await user.save();
+        console.log('✅ ADDED COURSE TO USER');
+      }
+
+      if (!isCourseEnrolled) {
+        course.enrolledStudents.push(userId);
+        await course.save();
+        console.log('✅ ADDED USER TO COURSE');
+      }
+
+      console.log('🎉🎉🎉 ENROLLMENT COMPLETED SUCCESSFULLY!');
+      
+      // Redirect đến trang thành công
+      return res.redirect(`${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/my-enrollments?success=true`);
+      
+    } else {
+      // THANH TOÁN THẤT BẠI
+      console.log('❌ PAYMENT FAILED:', message);
+      purchase.status = 'failed';
+      await purchase.save();
+      
+      return res.redirect(`${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/payment-error?message=${encodeURIComponent(message || 'Payment failed')}`);
+    }
+
+  } catch (error) {
+    console.error('💥 CALLBACK ERROR:', error);
+    return res.redirect(`${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/payment-error?message=Internal server error`);
+  }
+};
+
+
 export const updateUserCourseProgress = async (req,res)=>{
     try {
         const userId = req.auth().userId

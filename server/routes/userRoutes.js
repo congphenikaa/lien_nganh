@@ -1,11 +1,12 @@
 import express from 'express'
-import { addUserRating, getUserCourseProgress, getUserData, updateUserCourseProgress, userEnrolledCourses, createMomoPayment } from '../controllers/userController.js' // Thêm createMomoPayment
+import { addUserRating, getUserCourseProgress, getUserData, updateUserCourseProgress, userEnrolledCourses, createMomoPayment, handlePaymentCallback } from '../controllers/userController.js' // Thêm createMomoPayment
 
 const userRouter = express.Router()
 
 userRouter.get('/data', getUserData)
 userRouter.get('/enrolled-courses', userEnrolledCourses)
 userRouter.post('/momo-payment', createMomoPayment) 
+userRouter.get('/payment-callback', handlePaymentCallback)
 userRouter.post('/update-course-progress', updateUserCourseProgress)
 userRouter.post('/get-course-progress', getUserCourseProgress)
 userRouter.post('/add-rating', addUserRating)
