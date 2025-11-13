@@ -71,7 +71,7 @@ export const createMomoPayment = async (req, res) => {
     
     console.log('📦 EXTRADATA CREATED:', extraDataObject);
 
-    // MoMo parameters
+    // MoMo parameters - SỬ DỤNG ENV VARIABLES
     const partnerCode = process.env.MOMO_PARTNER_CODE || "MOMO";
     const accessKey = process.env.MOMO_ACCESS_KEY || "F8BBA842ECF85";
     const secretKey = process.env.MOMO_SECRET_KEY || "K951B6PE1waDMi640xX08PD3vg6EkVlz";
@@ -79,20 +79,28 @@ export const createMomoPayment = async (req, res) => {
     const orderId = requestId;
     const orderInfo = `Payment for course: ${course.courseTitle}`;
     
-    // 🚨 SỬ DỤNG URL TUYỆT ĐỐI
+    // 🚨 SỬ DỤNG URL CHÍNH XÁC
     const redirectUrl = `https://lms-backend-c9mslf3m8-congs-projects-1d5257dc.vercel.app/api/payment/callback`;
+    const ipnUrl = `https://lms-backend-c9mslf3m8-congs-projects-1d5257dc.vercel.app/api/momo-webhook`;
     const amount = course.coursePrice.toString();
     const requestType = "payWithMethod";
+    const lang = "en";
 
     console.log('🔗 REDIRECT URL:', redirectUrl);
+    console.log('🔗 IPN URL:', ipnUrl);
 
-    // Tạo signature
-    const rawSignature = `accessKey=${accessKey}&amount=${amount}&extraData=${extraData}&orderId=${orderId}&orderInfo=${orderInfo}&partnerCode=${partnerCode}&redirectUrl=${redirectUrl}&requestId=${requestId}&requestType=${requestType}`;
+    // 🚨 TẠO SIGNATURE ĐÚNG THỨ TỰ THAM SỐ
+    const rawSignature = `accessKey=${accessKey}&amount=${amount}&extraData=${extraData}&ipnUrl=${ipnUrl}&orderId=${orderId}&orderInfo=${orderInfo}&partnerCode=${partnerCode}&redirectUrl=${redirectUrl}&requestId=${requestId}&requestType=${requestType}`;
+    
+    console.log('🔐 RAW SIGNATURE:', rawSignature);
     
     const signature = crypto.createHmac('sha256', secretKey)
       .update(rawSignature)
       .digest('hex');
 
+    console.log('🔑 SIGNATURE:', signature);
+
+    // Request body với đầy đủ tham số
     const requestBody = JSON.stringify({
       partnerCode,
       accessKey,
@@ -101,6 +109,7 @@ export const createMomoPayment = async (req, res) => {
       orderId,
       orderInfo,
       redirectUrl,
+      ipnUrl, // 🚨 THÊM IPN URL
       extraData,
       requestType,
       signature,
@@ -108,6 +117,7 @@ export const createMomoPayment = async (req, res) => {
     });
 
     console.log('📤 SENDING REQUEST TO MOMO...');
+    console.log('📦 REQUEST BODY:', requestBody);
 
     const response = await fetch('https://test-payment.momo.vn/v2/gateway/api/create', {
       method: 'POST',
@@ -130,7 +140,8 @@ export const createMomoPayment = async (req, res) => {
       await Purchase.findByIdAndUpdate(purchaseData._id, { status: 'failed' });
       res.status(400).json({
         success: false,
-        message: data.message || 'Payment initiation failed'
+        message: data.message || 'Payment initiation failed',
+        momoError: data
       });
     }
 

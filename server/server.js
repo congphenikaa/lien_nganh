@@ -39,6 +39,12 @@ app.get('/api/payment/callback', async (req, res) => {
 
 app.get('/', (req, res)=> res.send("API Working"))
 app.post('/clerk', express.json(), clerkWebhooks)
+app.post('/api/momo-webhook', express.json(), (req, res) => {
+  console.log('🔔 MOMO WEBHOOK RECEIVED (TEMPORARY)');
+  console.log('📦 WEBHOOK BODY:', req.body);
+  // Luôn trả về 200 để MoMo không retry
+  res.status(200).json({ success: true });
+});
 app.use('/api/educator', educatorRouter)
 app.use('/api/admin', adminRouter)
 app.use('/api/course', courseRouter)
