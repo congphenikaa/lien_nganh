@@ -148,6 +148,9 @@ export const createMomoPayment = async (req, res) => {
 };
 
 export const handlePaymentCallback = async (req, res) => {
+  console.log('🔄 PAYMENT CALLBACK STARTED');
+  console.log('📧 FULL QUERY:', req.query);
+  
   try {
     const { 
       purchaseId, 
@@ -161,7 +164,7 @@ export const handlePaymentCallback = async (req, res) => {
       extraData
     } = req.query;
     
-    console.log('🔄 PAYMENT CALLBACK RECEIVED:', { 
+    console.log('🎯 PARSED PARAMETERS:', { 
       purchaseId, 
       resultCode, 
       message,
@@ -174,6 +177,8 @@ export const handlePaymentCallback = async (req, res) => {
       return res.redirect(`${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/payment-error?message=Invalid purchase ID`);
     }
 
+    console.log('🔍 LOOKING FOR PURCHASE:', purchaseId);
+    
     // Tìm purchase record
     const purchase = await Purchase.findById(purchaseId);
     if (!purchase) {
@@ -181,7 +186,12 @@ export const handlePaymentCallback = async (req, res) => {
       return res.redirect(`${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/payment-error?message=Purchase not found`);
     }
 
-    console.log('📋 CURRENT PURCHASE STATUS:', purchase.status);
+    console.log('📋 PURCHASE FOUND:', {
+      id: purchase._id,
+      status: purchase.status,
+      userId: purchase.userId,
+      courseId: purchase.courseId
+    });
 
     // Kiểm tra kết quả thanh toán
     if (resultCode === '0') {
@@ -204,26 +214,41 @@ export const handlePaymentCallback = async (req, res) => {
       // Thực hiện enrollment
       const { userId, courseId } = purchase;
 
+      console.log('🔍 LOOKING FOR USER AND COURSE:', { userId, courseId });
+
       const [user, course] = await Promise.all([
         User.findById(userId),
         Course.findById(courseId)
       ]);
 
-      if (!user || !course) {
-        console.error('❌ USER OR COURSE NOT FOUND');
-        return res.redirect(`${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/payment-error?message=User or course not found`);
+      if (!user) {
+        console.error('❌ USER NOT FOUND:', userId);
+        return res.redirect(`${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/payment-error?message=User not found`);
       }
 
-      console.log('👤 USER:', user.name);
-      console.log('📚 COURSE:', course.courseTitle);
+      if (!course) {
+        console.error('❌ COURSE NOT FOUND:', courseId);
+        return res.redirect(`${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/payment-error?message=Course not found`);
+      }
+
+      console.log('👤 USER FOUND:', user.name);
+      console.log('📚 COURSE FOUND:', course.courseTitle);
 
       // Kiểm tra và thêm enrollment
       const isUserEnrolled = user.enrolledCourses.includes(courseId);
       const isCourseEnrolled = course.enrolledStudents.includes(userId);
 
+      console.log('📊 ENROLLMENT STATUS:', {
+        isUserEnrolled,
+        isCourseEnrolled
+      });
+
+      let enrollmentUpdates = [];
+
       if (!isUserEnrolled) {
         user.enrolledCourses.push(courseId);
         await user.save();
+        enrollmentUpdates.push('ADDED_COURSE_TO_USER');
         console.log('✅ ADDED COURSE TO USER ENROLLMENTS');
       } else {
         console.log('ℹ️ USER ALREADY ENROLLED IN THIS COURSE');
@@ -232,15 +257,17 @@ export const handlePaymentCallback = async (req, res) => {
       if (!isCourseEnrolled) {
         course.enrolledStudents.push(userId);
         await course.save();
+        enrollmentUpdates.push('ADDED_USER_TO_COURSE');
         console.log('✅ ADDED USER TO COURSE STUDENTS');
       } else {
         console.log('ℹ️ USER ALREADY IN COURSE STUDENTS LIST');
       }
 
       console.log('🎉🎉🎉 ENROLLMENT COMPLETED SUCCESSFULLY!');
+      console.log('🔄 REDIRECTING TO FRONTEND...');
       
       // Redirect đến trang thành công
-      return res.redirect(`${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/my-enrollments?success=true&courseId=${courseId}`);
+      return res.redirect(`${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/my-enrollments?success=true&courseId=${courseId}&updates=${enrollmentUpdates.join(',')}`);
       
     } else {
       // THANH TOÁN THẤT BẠI
@@ -251,15 +278,16 @@ export const handlePaymentCallback = async (req, res) => {
       purchase.transactionId = transId;
       await purchase.save();
       
+      console.log('🔄 REDIRECTING TO ERROR PAGE...');
       return res.redirect(`${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/payment-error?message=${encodeURIComponent(message || 'Payment failed')}&purchaseId=${purchaseId}`);
     }
 
   } catch (error) {
     console.error('💥 CALLBACK ERROR:', error);
+    console.error('💥 ERROR STACK:', error.stack);
     return res.redirect(`${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/payment-error?message=Internal server error&error=${encodeURIComponent(error.message)}`);
   }
 };
-
 
 export const updateUserCourseProgress = async (req,res)=>{
     try {
