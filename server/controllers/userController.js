@@ -72,6 +72,13 @@ export const createMomoPayment = async (req, res) => {
     
     const extraData = Buffer.from(JSON.stringify(extraDataObject)).toString('base64');
 
+    // 🚨 SỬA URL CALLBACK - sử dụng URL tuyệt đối
+    const baseUrl = process.env.BACKEND_URL || `https://${req.get('host')}`;
+    const redirectUrl = `${baseUrl}/api/user/payment-callback`;
+    const ipnUrl = `${baseUrl}/api/momo-webhook`;
+
+    console.log('🔗 CALLBACK URLs:', { redirectUrl, ipnUrl });
+
     // MoMo parameters
     const partnerCode = process.env.MOMO_PARTNER_CODE || "MOMO";
     const accessKey = process.env.MOMO_ACCESS_KEY || "F8BBA842ECF85";
@@ -79,12 +86,8 @@ export const createMomoPayment = async (req, res) => {
     const requestId = partnerCode + new Date().getTime();
     const orderId = requestId;
     const orderInfo = `Payment for course: ${course.courseTitle}`;
-    const redirectUrl = `${process.env.BACKEND_URL || 'https://lms-backend-c9mslf3m8-congs-projects-1d5257dc.vercel.app'}/api/user/payment-callback`;
-    const ipnUrl = `${process.env.BACKEND_URL || 'https://lms-backend-c9mslf3m8-congs-projects-1d5257dc.vercel.app'}/api/momo-webhook`;
     const amount = course.coursePrice.toString();
     const requestType = "payWithMethod";
-
-    console.log('🔗 REDIRECT URL:', redirectUrl);
 
     // Tạo signature
     const rawSignature = `accessKey=${accessKey}&amount=${amount}&extraData=${extraData}&ipnUrl=${ipnUrl}&orderId=${orderId}&orderInfo=${orderInfo}&partnerCode=${partnerCode}&redirectUrl=${redirectUrl}&requestId=${requestId}&requestType=${requestType}`;
