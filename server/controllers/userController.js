@@ -36,19 +36,29 @@ export const createMomoPayment = async (req, res) => {
     const { courseId } = req.body;
     const userId = req.auth.userId;
 
+    console.log('💰 INITIATING MOMO PAYMENT:', { userId, courseId });
+
     if (!userId) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
-    // Tạo purchase record trước
+    // Tìm course
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({ success: false, message: "Course not found" });
+    }
+
+    // Tạo purchase record
     const purchaseData = await Purchase.create({
       courseId,
       userId,
-      amount: courseData.coursePrice, // Lấy giá từ course
+      amount: course.coursePrice,
       status: 'pending'
     });
 
-    // Tạo extraData với purchaseId
+    console.log('📝 PURCHASE CREATED:', purchaseData._id);
+
+    // Tạo extraData
     const extraDataObject = {
       purchaseId: purchaseData._id.toString(),
       userId: userId,
@@ -57,19 +67,19 @@ export const createMomoPayment = async (req, res) => {
     
     const extraData = Buffer.from(JSON.stringify(extraDataObject)).toString('base64');
 
-    // Các parameters cho MoMo
-    const partnerCode = process.env.MOMO_PARTNER_CODE;
-    const accessKey = process.env.MOMO_ACCESS_KEY;
-    const secretKey = process.env.MOMO_SECRET_KEY;
+    // MoMo parameters
+    const partnerCode = process.env.MOMO_PARTNER_CODE || "MOMO";
+    const accessKey = process.env.MOMO_ACCESS_KEY || "F8BBA842ECF85";
+    const secretKey = process.env.MOMO_SECRET_KEY || "K951B6PE1waDMi640xX08PD3vg6EkVlz";
     const requestId = partnerCode + new Date().getTime();
     const orderId = requestId;
-    const orderInfo = `Payment for course: ${courseData.courseTitle}`;
-    // const redirectUrl = `${process.env.FRONTEND_URL}/my-enrollments`; // URL sau khi thanh toán
-    const redirectUrl =`${origin}/loading/my-enrollments`;
-    const ipnUrl = `${process.env.BACKEND_URL}/api/momo-webhook`; 
-    const amount = courseData.coursePrice.toString();
+    const orderInfo = `Payment for course: ${course.courseTitle}`;
+    const redirectUrl = `${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/my-enrollments`;
+    const ipnUrl = `${process.env.BACKEND_URL || 'https://lms-backend-c9mslf3m8-congs-projects-1d5257dc.vercel.app'}/api/momo-webhook`;
+    const amount = course.coursePrice.toString();
     const requestType = "captureWallet";
-    const lang = 'en';
+
+    console.log('🔗 WEBHOOK URL:', ipnUrl);
 
     // Tạo signature
     const rawSignature = `accessKey=${accessKey}&amount=${amount}&extraData=${extraData}&ipnUrl=${ipnUrl}&orderId=${orderId}&orderInfo=${orderInfo}&partnerCode=${partnerCode}&redirectUrl=${redirectUrl}&requestId=${requestId}&requestType=${requestType}`;
@@ -87,12 +97,14 @@ export const createMomoPayment = async (req, res) => {
       orderId,
       orderInfo,
       redirectUrl,
-      ipnUrl, // ĐẢM BẢO CÓ IPN URL
+      ipnUrl,
       extraData,
       requestType,
       signature,
-      lang
+      lang: 'en'
     });
+
+    console.log('📤 SENDING REQUEST TO MOMO...');
 
     // Gửi request đến MoMo
     const response = await fetch('https://test-payment.momo.vn/v2/gateway/api/create', {
@@ -104,6 +116,7 @@ export const createMomoPayment = async (req, res) => {
     });
 
     const data = await response.json();
+    console.log('📥 MOMO RESPONSE:', data);
     
     if (data.resultCode === 0) {
       res.json({
@@ -121,7 +134,7 @@ export const createMomoPayment = async (req, res) => {
     }
 
   } catch (error) {
-    console.error('Payment error:', error);
+    console.error('💥 PAYMENT ERROR:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
