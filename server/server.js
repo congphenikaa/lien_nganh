@@ -23,16 +23,25 @@ await connectCloudinary()
 app.use(cors())
 app.use(clerkMiddleware())
 
-//Routes
+// 🔥 ROUTE ĐƠN GIẢN NHẤT - ĐẶT ĐẦU TIÊN
+app.get('/api/user/payment-callback', (req, res) => {
+  console.log('✅ PAYMENT CALLBACK HIT!', req.query);
+  
+  // Trả về response đơn giản trước
+  res.json({
+    success: true,
+    message: 'Payment callback received!',
+    query: req.query
+  });
+});
+
+// Các routes khác
 app.get('/', (req, res)=> res.send("API Working"))
-
-app.get('/api/user/payment-callback', handlePaymentCallback)
-
 app.post('/clerk', express.json(), clerkWebhooks)
 app.use('/api/educator',express.json(), educatorRouter)
 app.use('/api/admin', express.json(), adminRouter)
 app.use('/api/course', express.json(), courseRouter)
-app.use('/api/user', express.json(), userRouter) // MOUNT USER ROUTER
+app.use('/api/user', express.json(), userRouter)
 
 //Port
 const PORT = process.env.PORT || 5000
