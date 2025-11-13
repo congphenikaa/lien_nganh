@@ -77,7 +77,7 @@ export const createMomoPayment = async (req, res) => {
     const redirectUrl = `${process.env.FRONTEND_URL || 'https://lms-frontend-puce-ten.vercel.app'}/my-enrollments`;
     const ipnUrl = `${process.env.BACKEND_URL || 'https://lms-backend-c9mslf3m8-congs-projects-1d5257dc.vercel.app'}/api/momo-webhook`;
     const amount = course.coursePrice.toString();
-    const requestType = "captureWallet";
+    const requestType = "payWithMethod";
 
     console.log('🔗 WEBHOOK URL:', ipnUrl);
 
