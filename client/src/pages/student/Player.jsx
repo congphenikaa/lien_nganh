@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useState, useCallback } from "react"
 import { useContext } from "react"
 import { AppContext } from "../../context/AppContext"
 import { useParams } from "react-router-dom"
@@ -22,9 +22,16 @@ const Player = () => {
   const [rating, setRating] = useState(0)
   const [loading, setLoading] = useState(true)
 
-  const getCourseData = ()=>{
+  const getCourseData = useCallback(()=>{
     console.log('Getting course data for courseId:', courseId)
-    console.log('Enrolled courses:', enrolledCourses.length)
+    console.log('Enrolled courses:', enrolledCourses ? enrolledCourses.length : 0)
+    
+    // Kiểm tra enrolledCourses có tồn tại và là array không
+    if(!enrolledCourses || !Array.isArray(enrolledCourses)) {
+      console.log('Enrolled courses is null or not an array')
+      setLoading(false)
+      return
+    }
     
     const foundCourse = enrolledCourses.find(course => course._id === courseId)
     if(foundCourse){
@@ -40,8 +47,9 @@ const Player = () => {
       setLoading(false)
     } else {
       console.log('Course not found in enrolled courses')
+      setLoading(false)
     }
-  }
+  }, [enrolledCourses, courseId, userData])
 
   const toggleSection = (index)=> {
     setOpenSections((prev) => (
@@ -56,16 +64,16 @@ const Player = () => {
     if(userData && courseId){
       fetchUserEnrolledCourses()
     }
-  }, [userData, courseId])
+  }, [userData, courseId, fetchUserEnrolledCourses])
 
   useEffect(()=>{
-    if(enrolledCourses.length > 0 && courseId){
+    if(enrolledCourses && enrolledCourses.length > 0 && courseId){
       getCourseData()
-    } else if(enrolledCourses.length === 0 && userData && courseId){
+    } else if(enrolledCourses && enrolledCourses.length === 0 && userData && courseId){
       // If no enrolled courses but user is logged in, show message
       setLoading(false)
     }
-  }, [enrolledCourses, courseId, userData])
+  }, [enrolledCourses, courseId, userData, getCourseData])
 
   const marklectureAsCompleted = async (lectureId)=>{
     try {
@@ -83,7 +91,7 @@ const Player = () => {
     }
   }
 
-  const getCourseProgress = async () =>{
+  const getCourseProgress = useCallback(async () =>{
     try {
       const token = await getToken()
       const {data} = await axios.post(backendUrl + '/api/user/get-course-progress',{courseId}, {headers: {Authorization: `Bearer ${token}`}})
@@ -95,7 +103,7 @@ const Player = () => {
     } catch (error) {
       toast.error(error.message)
     }
-  }
+  }, [courseId, getToken, backendUrl])
 
   const handleRate = async ()=>{
     try {
@@ -117,7 +125,7 @@ const Player = () => {
     if(courseId){
       getCourseProgress()
     }
-  },[courseId])
+  },[courseId, getCourseProgress])
 
   if (loading) {
     return (

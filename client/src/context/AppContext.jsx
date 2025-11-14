@@ -165,14 +165,27 @@ export const AppContextProvider = (props) => {
         const token = await getToken();
         const {data} = await axios.get(backendUrl + '/api/user/enrolled-courses',{headers: {Authorization: `Bearer ${token}`}})
         
-        if(data.success){
-          setEnrolledCourses(data.enrolledCourses.reverse())
+        if(data && data.success){
+          // Kiểm tra nếu enrolledCourses tồn tại và là array
+          if(data.enrolledCourses && Array.isArray(data.enrolledCourses)){
+            setEnrolledCourses(data.enrolledCourses.reverse())
+          } else {
+            // Nếu không có enrolled courses, set empty array
+            setEnrolledCourses([])
+          }
         }else{
-          toast.error(data.message)
+          console.error('API response:', data);
+          setEnrolledCourses([])
+          if(data && data.message){
+            toast.error(data.message)
+          } else {
+            toast.error('Có lỗi khi tải danh sách khóa học')
+          }
         }
       } catch (error) {
         console.error('Error fetching enrolled courses:', error);
-        toast.error(error.message)
+        setEnrolledCourses([]) // Set empty array on error
+        toast.error(error.message || 'Có lỗi khi kết nối server')
       }
 
     }

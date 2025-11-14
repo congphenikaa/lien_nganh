@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from 'react'
+import React, { useContext, useEffect, useState, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { AppContext } from '../../context/AppContext';
 import Loading from '../../components/student/Loading';
@@ -22,9 +22,9 @@ const CourseDetails = () => {
 
 
   const {calculateRating, calculateChapterTime, 
-    calculateNoOfLectures, calculateCourseDuration, currency, backendUrl, userData, getToken} = useContext(AppContext);
+    calculateNoOfLectures, calculateCourseDuration, currency, backendUrl, userData, getToken, navigate, fetchUserEnrolledCourses} = useContext(AppContext);
 
-  const fetchCourseData = async () => {
+  const fetchCourseData = useCallback(async () => {
     try {
       const {data} = await axios.get(backendUrl + '/api/course/' + id)
       if(data.success){
@@ -35,15 +35,20 @@ const CourseDetails = () => {
     } catch (error) {
       toast.error(error.message)
     }
-  }
-  const enrollCourse = async ()=>{
+  }, [backendUrl, id])
+  const handleEnrollOrNavigate = async ()=>{
     try {
       if(!userData){
         return toast.warn('Login to Enroll')
       }
+      
+      // Nếu đã enrolled, chuyển đến trang học
       if(isAlreadyEnrolled){
-        return toast.warn('Already Enrolled')
+        navigate('/player/' + courseData._id)
+        return
       }
+      
+      // Nếu chưa enrolled, tiến hành thanh toán
       if (!courseData || !courseData._id) {
         toast.error('Course data is not loaded yet. Please try again.')
         return;
@@ -64,11 +69,24 @@ const CourseDetails = () => {
 
   useEffect(() => {
     fetchCourseData();
-  }, []);
+    // Fetch enrolled courses để đảm bảo userData.enrolledCourses được cập nhật
+    if(userData) {
+      fetchUserEnrolledCourses();
+    }
+  }, [fetchCourseData, userData, fetchUserEnrolledCourses]);
 
   useEffect(() => {
     if(userData && courseData){
-      setIsAlreadyEnrolled(userData.enrolledCourses.includes(courseData._id))
+      console.log('Checking enrollment for course:', courseData._id)
+      console.log('User enrolled courses:', userData.enrolledCourses)
+      
+      // Kiểm tra trong enrolledCourses array (có thể là array of objects hoặc array of IDs)
+      const isEnrolled = userData.enrolledCourses && userData.enrolledCourses.some(course => 
+        typeof course === 'string' ? course === courseData._id : course._id === courseData._id
+      )
+      
+      console.log('Is enrolled:', isEnrolled)
+      setIsAlreadyEnrolled(isEnrolled || false)
     }
   }, [userData, courseData]);
 
@@ -106,6 +124,15 @@ const CourseDetails = () => {
           <p className='text-blue-600'>({courseData.courseRatings.length} {courseData.courseRatings.length > 1 ? 'ratings' : 'rating'})</p>
 
           <p>{courseData.enrolledStudents.length} {courseData.enrolledStudents.length > 1 ? 'students' : 'student'}</p>
+          
+          {isAlreadyEnrolled && (
+            <div className='flex items-center text-green-600 font-medium'>
+              <svg className='w-4 h-4 mr-1' fill='currentColor' viewBox='0 0 20 20'>
+                <path fillRule='evenodd' d='M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z' clipRule='evenodd' />
+              </svg>
+              Enrolled
+            </div>
+          )}
         </div>
         <p className='text-sm'>Course by <span className='text-blue-600 underline'>{courseData.educator.name}</span></p>
 
@@ -209,7 +236,16 @@ const CourseDetails = () => {
             
 
             </div>
-            <button onClick={enrollCourse} className='md:mt-6 mt-4 w-full py-3 rounded bg-blue-600 text-white font-medium'>{isAlreadyEnrolled ? 'Already Enrolled' : 'Enroll Now'}</button>
+            <button 
+              onClick={handleEnrollOrNavigate} 
+              className={`md:mt-6 mt-4 w-full py-3 rounded font-medium transition-colors ${
+                isAlreadyEnrolled 
+                  ? 'bg-green-600 hover:bg-green-700 text-white' 
+                  : 'bg-blue-600 hover:bg-blue-700 text-white'
+              }`}
+            >
+              {isAlreadyEnrolled ? 'Continue Learning' : 'Enroll Now'}
+            </button>
             <div className='pt-6'>
               <p className='md:text-xl text-lg font-medium text-gray-800'>What's in the course</p>
               <ul className='ml-4 pt-2 text-sm md:text-default list-disc text-gray-500'>

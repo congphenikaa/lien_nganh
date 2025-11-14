@@ -20,6 +20,9 @@ const PaymentStatus = () => {
       setStatus('success')
       toast.success('Thanh toán thành công! Đang cập nhật khóa học...')
       
+      // Đánh dấu là vừa thanh toán thành công
+      sessionStorage.setItem('recentPayment', 'true')
+      
       // Refresh enrolled courses và chuyển hướng
       const refreshAndRedirect = async () => {
         try {

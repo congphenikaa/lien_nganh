@@ -10,9 +10,17 @@ const MyEnrollments = () => {
   const {enrolledCourses, calculateCourseDuration, navigate, userData, fetchUserEnrolledCourses, backendUrl, getToken, calculateNoOfLectures} = useContext(AppContext)
 
   const [progressArray, setProgressArray] = useState([])
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [lastEnrolledCount, setLastEnrolledCount] = useState(0)
 
   const getCourseProgress = useCallback(async ()=>{
     try {
+      // Kiểm tra enrolledCourses có tồn tại và không rỗng
+      if (!enrolledCourses || !Array.isArray(enrolledCourses) || enrolledCourses.length === 0) {
+        setProgressArray([])
+        return
+      }
+
       const token = await getToken();
       const tempProgressArray = await Promise.all(
         enrolledCourses.map(async (course)=>{
@@ -26,45 +34,83 @@ const MyEnrollments = () => {
 
      
     } catch (error) {
+      console.error('Error getting course progress:', error)
       toast.error(error.message)
+      setProgressArray([])
     }
-  }, [enrolledCourses, backendUrl])
+  }, [enrolledCourses, backendUrl, getToken, calculateNoOfLectures])
 
   // Auto refresh để đảm bảo courses được cập nhật sau thanh toán
   useEffect(()=>{
     const autoRefresh = async () => {
-    if(userData) {
-            console.log('Auto-refreshing enrolled courses...'); // Thêm log để kiểm tra
-    await fetchUserEnrolledCourses()
-    }
+      if(userData) {
+        console.log('Auto-refreshing enrolled courses...'); // Thêm log để kiểm tra
+        setIsRefreshing(true)
+        await fetchUserEnrolledCourses()
+        setTimeout(() => setIsRefreshing(false), 1000) // Hide indicator after 1s
+      }
     }
     
     // Refresh ngay khi component mount
     autoRefresh()
     
-    // Auto refresh mỗi 10s trong 2 phút đầu để catch webhook updates
-    const interval = setInterval(autoRefresh, 10000)
-    const timeout = setTimeout(() => {
-          console.log('Stopping auto-refresh'); // Thêm log
-          clearInterval(interval)
-        }, 120000) // 2 phút
+    // Kiểm tra xem có phải từ payment success không
+    const urlParams = new URLSearchParams(window.location.search)
+    const fromPayment = urlParams.get('success') === 'true' || 
+                       window.location.pathname.includes('payment-status') ||
+                       sessionStorage.getItem('recentPayment') === 'true'
+    
+    let interval, timeout
+    
+    if (fromPayment) {
+      console.log('Detected recent payment, starting enhanced refresh...')
+      // Nếu từ payment, refresh thường xuyên hơn trong thời gian ngắn
+      interval = setInterval(autoRefresh, 3000) // Refresh mỗi 3s
+      timeout = setTimeout(() => {
+        console.log('Stopping enhanced auto-refresh')
+        clearInterval(interval)
+        sessionStorage.removeItem('recentPayment')
+      }, 60000) // Chỉ 1 phút thôi
+    } else {
+      // Refresh bình thường với tần suất thấp hơn
+      interval = setInterval(autoRefresh, 15000) // Refresh mỗi 15s
+      timeout = setTimeout(() => {
+        console.log('Stopping normal auto-refresh')
+        clearInterval(interval)
+      }, 90000) // 1.5 phút
+    }
     
     return () => {
-    clearInterval(interval)
-    clearTimeout(timeout)
+      if (interval) clearInterval(interval)
+      if (timeout) clearTimeout(timeout)
     }
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
-    }, [userData])
+  }, [userData])
+
   useEffect(()=>{
-    if(enrolledCourses.length > 0){
+    if(enrolledCourses && enrolledCourses.length > 0){
+      // Kiểm tra nếu có khóa học mới được thêm
+      if(lastEnrolledCount > 0 && enrolledCourses.length > lastEnrolledCount) {
+        const newCourseCount = enrolledCourses.length - lastEnrolledCount
+        toast.success(`🎉 ${newCourseCount} khóa học mới đã được thêm vào danh sách!`)
+      }
+      setLastEnrolledCount(enrolledCourses.length)
       getCourseProgress()
     }
-  },[enrolledCourses, getCourseProgress])
+  },[enrolledCourses, getCourseProgress, lastEnrolledCount])
 
   return (
     <>
     <div className='md:px-36 px-8 pt-10'>
-      <h1 className='text-2xl font-semibold'>My Enrollments</h1>
+      <div className='flex items-center justify-between mb-4'>
+        <h1 className='text-2xl font-semibold'>My Enrollments</h1>
+        {isRefreshing && (
+          <div className='flex items-center text-blue-600 text-sm'>
+            <div className='w-4 h-4 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin mr-2'></div>
+            Đang cập nhật...
+          </div>
+        )}
+      </div>
       <table className='md:table-auto table-fixed w-full overflow-hidden border mt-10'>
         <thead className='text-gray-900 border-b border-gray-500/20 text-sm text-left max-sm:hidden'>
           <tr>
@@ -75,7 +121,7 @@ const MyEnrollments = () => {
           </tr>
         </thead>
         <tbody className='text-gray-700'>
-          {enrolledCourses.length > 0 ? (
+          {enrolledCourses && enrolledCourses.length > 0 ? (
             enrolledCourses.map((course, index)=>(
               <tr key={index} className='border-b border-gray-500/20'>
                 <td className='md:px-4 pl-2 md:pl-4 py-3 flex items-center space-x-3'>
