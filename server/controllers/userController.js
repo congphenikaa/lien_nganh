@@ -3,28 +3,10 @@ import { Purchase } from "../models/Purchase.js"
 import { CourseProgress } from "../models/CourseProgress.js"
 import Course from "../models/Course.js"
 import crypto from 'crypto'
-import https from 'https'
 
 export const getUserData = async (req,res)=>{
     try {
-        // Check if auth function exists
-        if (typeof req.auth !== 'function') {
-            return res.json({ success: false, message: 'Authentication middleware not available' });
-        }
-        
-        let auth;
-        try {
-            auth = req.auth();
-        } catch (authError) {
-            console.error('❌ Error calling req.auth():', authError);
-            return res.json({ success: false, message: 'Authentication function error' });
-        }
-        
-        if (!auth || !auth.userId) {
-            return res.json({ success: false, message: 'User not authenticated' });
-        }
-        
-        const userId = auth.userId;
+        const userId = req.auth.userId // Sửa từ req.auth().userId
         const user = await User.findById(userId)
         
         if(!user){
@@ -40,191 +22,154 @@ export const getUserData = async (req,res)=>{
 
 export const userEnrolledCourses = async (req, res) =>{
     try {
-        console.log('=== USER ENROLLED COURSES ===');
-        
-        // Check authentication
-        if (typeof req.auth !== 'function') {
-            return res.json({ success: false, message: 'Authentication middleware not available' });
-        }
-        
-        const auth = req.auth();
-        if (!auth || !auth.userId) {
-            return res.json({ success: false, message: 'User not authenticated' });
-        }
-        
-        const userId = auth.userId;
-        console.log('Fetching enrolled courses for user:', userId);
-        
+        const userId = req.auth.userId // Sửa từ req.auth().userId
         const userData = await User.findById(userId).populate('enrolledCourses')
-        console.log('User found:', !!userData);
-        
-        if (!userData) {
-            console.log('❌ User not found in database:', userId);
-            console.log('This might be normal if user was just created via Clerk webhook');
-            
-            // Create user if doesn't exist (fallback)
-            console.log('Attempting to create user record...');
-            // But we don't have user details here, so just return empty array
-            return res.json({success: true, enrolledCourses: []})
-        }
-        
-        console.log('✅ User found in database');
-        console.log('Enrolled courses count:', userData?.enrolledCourses?.length || 0);
-        console.log('Enrolled course IDs:', userData.enrolledCourses.map(c => c._id));
-        
-        res.json({success: true, enrolledCourses: userData.enrolledCourses})
+        res.json({success: true,enrolledCourses: userData.enrolledCourses})
     } catch (error) {
-        console.error('❌ Error in userEnrolledCourses:', error);
         res.json({success: false, message: error.message})
     }
 }
 
-// Hàm tạo thanh toán MoMo
 export const createMomoPayment = async (req, res) => {
-    try {
-        // Check authentication
-        if (typeof req.auth !== 'function') {
-            return res.json({ success: false, message: 'Authentication middleware not available' });
-        }
-        
-        const auth = req.auth();
-        if (!auth || !auth.userId) {
-            return res.json({ success: false, message: 'User not authenticated' });
-        }
-        
-        const { courseId } = req.body
-        const { origin } = req.headers
-        const userId = auth.userId;
-        
-        const userData = await User.findById(userId)
-        const courseData = await Course.findById(courseId)
+  try {
+    const { courseId } = req.body
+    const userId = req.auth.userId
 
-        if (!userData || !courseData) {
-            return res.json({ success: false, message: 'Data Not Found' })
-        }
+    if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" })
 
-        // Tính toán số tiền
-        const amount = Math.floor(courseData.coursePrice - (courseData.discount * courseData.coursePrice / 100));
+    const course = await Course.findById(courseId)
+    if (!course) return res.status(404).json({ success: false, message: "Course not found" })
 
-        // Tạo purchase record
-        const purchaseData = {
-            courseId: courseData._id,
-            userId,
-            amount: amount,
-            paymentMethod: 'momo'
-        }
-
-        const newPurchase = await Purchase.create(purchaseData)
-
-        // Thông tin MoMo
-        const accessKey = process.env.MOMO_ACCESS_KEY || 'F8BBA842ECF85'
-        const secretKey = process.env.MOMO_SECRET_KEY || 'K951B6PE1waDMi640xX08PD3vg6EkVlz'
-        const partnerCode = process.env.MOMO_PARTNER_CODE || 'MOMO'
-        
-        const orderInfo = `Thanh toán khóa học: ${courseData.courseTitle}`
-        const orderId = partnerCode + new Date().getTime()
-        const requestId = orderId
-        const requestType = "payWithMethod"
-        const redirectUrl = `${origin}/payment-status`
-        const ipnUrl = `${process.env.BACKEND_URL}/momo-webhook`
-        const extraData = Buffer.from(JSON.stringify({ purchaseId: newPurchase._id.toString() })).toString('base64')
-        const lang = 'vi'
-
-        // Tạo signature
-        const rawSignature = `accessKey=${accessKey}&amount=${amount}&extraData=${extraData}&ipnUrl=${ipnUrl}&orderId=${orderId}&orderInfo=${orderInfo}&partnerCode=${partnerCode}&redirectUrl=${redirectUrl}&requestId=${requestId}&requestType=${requestType}`
-        
-        const signature = crypto.createHmac('sha256', secretKey)
-            .update(rawSignature)
-            .digest('hex')
-
-        // Tạo request body
-        const requestBody = JSON.stringify({
-            partnerCode: partnerCode,
-            partnerName: "Your Company Name",
-            storeId: "YourStoreId",
-            requestId: requestId,
-            amount: amount,
-            orderId: orderId,
-            orderInfo: orderInfo,
-            redirectUrl: redirectUrl,
-            ipnUrl: ipnUrl,
-            lang: lang,
-            requestType: requestType,
-            autoCapture: true,
-            extraData: extraData,
-            orderGroupId: "",
-            signature: signature
-        })
-
-        // Gọi API MoMo
-        const options = {
-            hostname: 'test-payment.momo.vn',
-            port: 443,
-            path: '/v2/gateway/api/create',
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength(requestBody)
-            }
-        }
-
-        const paymentUrl = await new Promise((resolve, reject) => {
-            const req = https.request(options, (response) => {
-                let data = ''
-                
-                response.on('data', (chunk) => {
-                    data += chunk
-                })
-                
-                response.on('end', () => {
-                    try {
-                        const result = JSON.parse(data)
-                        if (result.resultCode === 0) {
-                            resolve(result.payUrl)
-                        } else {
-                            reject(new Error(result.message || 'Payment creation failed'))
-                        }
-                    } catch (error) {
-                        reject(error)
-                    }
-                })
-            })
-
-            req.on('error', (error) => {
-                reject(error)
-            })
-
-            req.write(requestBody)
-            req.end()
-        })
-
-        console.log('✅ Payment URL generated:', paymentUrl);
-        
-        res.json({ 
-            success: true, 
-            payment_url: paymentUrl,
-            purchaseId: newPurchase._id 
-        })
-
-    } catch (error) {
-        console.error('MoMo Payment Error:', error)
-        res.json({ success: false, message: error.message })
+    const user = await User.findById(userId)
+    if (user.enrolledCourses.includes(courseId)) {
+      return res.status(400).json({ success: false, message: "Already enrolled" })
     }
+
+    const purchaseData = await Purchase.create({
+      courseId,
+      userId,
+      amount: course.coursePrice,
+      status: 'pending'
+    })
+
+    // ✅ Tạo extraData
+    const extraData = encodeURIComponent(JSON.stringify({
+      purchaseId: purchaseData._id.toString(),
+      userId,
+      courseId
+    }))
+
+    const partnerCode = process.env.MOMO_PARTNER_CODE
+    const accessKey = process.env.MOMO_ACCESS_KEY
+    const secretKey = process.env.MOMO_SECRET_KEY
+    const requestId = partnerCode + Date.now()
+    const orderId = requestId
+    const orderInfo = `Payment for course: ${course.courseTitle}`
+    const amount = course.coursePrice.toString()
+
+    const redirectUrl = `${process.env.BACKEND_URL}/api/payment/callback`
+    const ipnUrl = `${process.env.BACKEND_URL}/api/momo-webhook`
+
+    const requestType = "payWithMethod"
+    const rawSignature = 
+      `accessKey=${accessKey}&amount=${amount}&extraData=${extraData}&ipnUrl=${ipnUrl}` +
+      `&orderId=${orderId}&orderInfo=${orderInfo}&partnerCode=${partnerCode}` +
+      `&redirectUrl=${redirectUrl}&requestId=${requestId}&requestType=${requestType}`
+
+    const signature = crypto.createHmac('sha256', secretKey).update(rawSignature).digest('hex')
+
+    const body = JSON.stringify({
+      partnerCode, accessKey, requestId, amount, orderId, orderInfo,
+      redirectUrl, ipnUrl, extraData, requestType, signature, lang: 'en'
+    })
+
+    const response = await fetch('https://test-payment.momo.vn/v2/gateway/api/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body
+    })
+    const data = await response.json()
+
+    if (data.resultCode === 0) {
+      res.json({ success: true, payment_url: data.payUrl, purchaseId: purchaseData._id })
+    } else {
+      await Purchase.findByIdAndUpdate(purchaseData._id, { status: 'failed' })
+      res.status(400).json({ success: false, message: data.message || 'Payment failed' })
+    }
+
+  } catch (err) {
+    console.error('💥 createMomoPayment ERROR:', err)
+    res.status(500).json({ success: false, message: err.message })
+  }
+}
+
+
+// ✅ Callback khi thanh toán xong
+export const handlePaymentCallback = async (req, res) => {
+  console.log('🔄 MoMo CALLBACK HIT')
+  console.log('📧 Query:', req.query)
+
+  try {
+    const { resultCode, message, transId, extraData } = req.query
+
+    // ✅ Giải mã extraData an toàn
+    let purchaseId
+    try {
+      if (extraData) {
+        let decoded = decodeURIComponent(extraData)
+        try { decoded = decodeURIComponent(decoded) } catch (_) {}
+        const parsed = JSON.parse(decoded)
+        purchaseId = parsed.purchaseId
+      }
+    } catch (err) {
+      console.error('❌ extraData parse error:', err)
+    }
+
+    if (!purchaseId) {
+      return res.redirect(`${process.env.FRONTEND_URL}/payment-error?message=Invalid purchase ID`)
+    }
+
+    const purchase = await Purchase.findById(purchaseId)
+    if (!purchase) {
+      return res.redirect(`${process.env.FRONTEND_URL}/payment-error?message=Purchase not found`)
+    }
+
+    if (resultCode === '0') {
+      purchase.status = 'completed'
+      purchase.transactionId = transId
+      await purchase.save()
+
+      const user = await User.findById(purchase.userId)
+      const course = await Course.findById(purchase.courseId)
+
+      if (user && course) {
+        if (!user.enrolledCourses.includes(course._id)) {
+          user.enrolledCourses.push(course._id)
+          await user.save()
+        }
+        if (!course.enrolledStudents.includes(user._id)) {
+          course.enrolledStudents.push(user._id)
+          await course.save()
+        }
+      }
+
+      return res.redirect(`${process.env.FRONTEND_URL}/my-enrollments?success=true`)
+    }
+
+    // ❌ Thất bại
+    purchase.status = 'failed'
+    await purchase.save()
+    return res.redirect(`${process.env.FRONTEND_URL}/payment-error?message=${encodeURIComponent(message || 'Payment failed')}`)
+
+  } catch (err) {
+    console.error('💥 CALLBACK ERROR:', err)
+    return res.redirect(`${process.env.FRONTEND_URL}/payment-error?message=${encodeURIComponent(err.message)}`)
+  }
 }
 
 export const updateUserCourseProgress = async (req,res)=>{
     try {
-        // Check authentication
-        if (typeof req.auth !== 'function') {
-            return res.json({ success: false, message: 'Authentication middleware not available' });
-        }
-        
-        const auth = req.auth();
-        if (!auth || !auth.userId) {
-            return res.json({ success: false, message: 'User not authenticated' });
-        }
-        
-        const userId = auth.userId;
+        const userId = req.auth.userId // Sửa từ req.auth().userId
         const {courseId, lectureId} = req.body
         const progressData = await CourseProgress.findOne({userId, courseId})
 
@@ -250,27 +195,21 @@ export const updateUserCourseProgress = async (req,res)=>{
 
 export const getUserCourseProgress = async (req, res) =>{
     try {
-        // Check authentication
-        if (typeof req.auth !== 'function') {
-            return res.json({ success: false, message: 'Authentication middleware not available' });
-        }
-        
-        const auth = req.auth();
-        if (!auth || !auth.userId) {
-            return res.json({ success: false, message: 'User not authenticated' });
-        }
-        
-        const userId = auth.userId;
+        const userId = req.auth.userId // Sửa từ req.auth().userId
         const {courseId} = req.body
         const progressData = await CourseProgress.findOne({userId, courseId})
         res.json({success: true, progressData})
     } catch (error) {
         res.json({success: false, message: error.message})
-        
     }
 }
 
 export const addUserRating = async (req, res) =>{
+    const userId = req.auth.userId // Sửa từ req.auth().userId
+    const { courseId, rating } = req.body;
+    if (!courseId || !userId || !rating || rating < 1 || rating > 5){
+        return res.json({success: false, message: 'InValid Details'})
+    }
     try {
         // Check authentication
         if (typeof req.auth !== 'function') {
@@ -295,7 +234,7 @@ export const addUserRating = async (req, res) =>{
         }
 
         const user = await User.findById(userId)
-        if(!user || !user.enrolledCourses.some(enrolledCourseId => enrolledCourseId.toString() === courseId)){
+        if(!user || !user.enrolledCourses.includes(courseId)){
             return res.json({ success: false , message: 'User has not purchased this course.'})
         }
 

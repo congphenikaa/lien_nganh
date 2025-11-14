@@ -6,8 +6,7 @@ const PurchaseSchema = new mongoose.Schema({
     amount: {type: Number, required: true},
     status: {type: String, enum: ['pending','completed','failed'], default: 'pending'},
     transactionId: {type: String},
-    orderId: {type: String},
-    paymentMethod: {type: String, default: 'momo'}
+    paymentMethod: {type: String, default: 'momo'} 
 }, {timestamps: true});
 
 export const Purchase = mongoose.model('Purchase', PurchaseSchema)

@@ -2,54 +2,50 @@ import express from 'express'
 import cors from 'cors'
 import 'dotenv/config'
 import connectDB from './configs/mongodb.js'
-import { clerkWebhooks, momoWebhooks } from './controllers/webhooks.js' // Thêm momoWebhooks
+import connectCloudinary from './configs/cloudinary.js'
+import { clerkWebhooks } from './controllers/webhooks.js'
+import { clerkMiddleware } from '@clerk/express'
 import educatorRouter from './routes/educatorRoutes.js'
 import adminRouter from './routes/adminRoutes.js'
-import { clerkMiddleware } from '@clerk/express'
-import connectCloudinary from './configs/cloudinary.js'
 import courseRouter from './routes/courseRoute.js'
 import userRouter from './routes/userRoutes.js'
+import { handlePaymentCallback } from './controllers/userController.js'  // ✅ Import tĩnh
 import { autoCleanupOldRequests } from './controllers/adminController.js'
 
-//Initialize Express
 const app = express()
 
-// Connect to database
 await connectDB()
 await connectCloudinary()
 
-//Middlewares
 app.use(cors())
 
 // Apply Clerk middleware BEFORE any JSON parsing
 app.use(clerkMiddleware())
+app.use(express.urlencoded({ extended: true }))
+app.use(express.json())
 
-//Routes that don't need authentication (but need JSON parsing)
+// ✅ Callback MoMo
+app.get('/api/payment/callback', handlePaymentCallback)
+app.post('/api/payment/callback', handlePaymentCallback)
+
+// ✅ Webhook tạm
+app.post('/api/momo-webhook', (req, res) => {
+  console.log('🔔 MOMO WEBHOOK RECEIVED')
+  res.status(200).json({ success: true })
+})
+
+// Các route khác
 app.get('/', (req, res)=> res.send("API Working"))
 app.post('/clerk', express.json(), clerkWebhooks)
-app.post('/momo-webhook', express.json(), momoWebhooks) // Thêm route MoMo webhook
+app.use('/api/educator', educatorRouter)
+app.use('/api/admin', adminRouter)
+app.use('/api/course', courseRouter)
+app.use('/api/user', userRouter)
 
-// Protected routes - User routes first to avoid conflicts
-app.use('/api/user', userRouter) // No express.json() here - handled per route
-
-// Other routes with their own middleware
-app.use('/api/educator', express.json(), educatorRouter)
-app.use('/api/admin', express.json(), adminRouter)
-app.use('/api/course', express.json(), courseRouter)
-
-
-//Port
 const PORT = process.env.PORT || 5000
-
 app.listen(PORT, ()=>{
-    console.log(`Server is running on port ${PORT}`)
-    
-    // Auto cleanup old educator requests every 24 hours
-    const cleanupInterval = 24 * 60 * 60 * 1000 // 24 hours in milliseconds
-    setInterval(autoCleanupOldRequests, cleanupInterval)
-    
-    // Run cleanup once when server starts
-    autoCleanupOldRequests()
-    
-    console.log('Auto cleanup for old educator requests is scheduled every 24 hours')
+  console.log(`✅ Server is running on port ${PORT}`)
+  const cleanupInterval = 24 * 60 * 60 * 1000
+  setInterval(autoCleanupOldRequests, cleanupInterval)
+  autoCleanupOldRequests()
 })

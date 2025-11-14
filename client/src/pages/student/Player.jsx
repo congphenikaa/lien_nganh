@@ -1,4 +1,4 @@
-import React, { use, useEffect, useState } from "react"
+import React, { useEffect, useState } from "react"
 import { useContext } from "react"
 import { AppContext } from "../../context/AppContext"
 import { useParams } from "react-router-dom"
@@ -19,18 +19,28 @@ const Player = () => {
   const [playerData, setPlayerData] = useState(null)
   const [progressData, setProgressData] = useState(null)
   const [initialRating, setInitialRating] = useState(0)
+  const [rating, setRating] = useState(0)
+  const [loading, setLoading] = useState(true)
 
   const getCourseData = ()=>{
-    enrolledCourses.map((course)=>{
-      if(course._id === courseId){
-        setCourseData(course)
-        course.courseRatings.map((item)=>{
+    console.log('Getting course data for courseId:', courseId)
+    console.log('Enrolled courses:', enrolledCourses.length)
+    
+    const foundCourse = enrolledCourses.find(course => course._id === courseId)
+    if(foundCourse){
+      console.log('Found course:', foundCourse.courseTitle)
+      setCourseData(foundCourse)
+      if(foundCourse.courseRatings && foundCourse.courseRatings.length > 0){
+        foundCourse.courseRatings.forEach((item)=>{
           if(item.userId === userData._id){
             setInitialRating(item.rating)
           }
         })
       }
-    })
+      setLoading(false)
+    } else {
+      console.log('Course not found in enrolled courses')
+    }
   }
 
   const toggleSection = (index)=> {
@@ -41,12 +51,21 @@ const Player = () => {
     ));
   };
 
+  // Fetch enrolled courses when component mounts
   useEffect(()=>{
-    if(enrolledCourses.length > 0){
-      getCourseData()
+    if(userData && courseId){
+      fetchUserEnrolledCourses()
     }
-      
-  }, [enrolledCourses])
+  }, [userData, courseId])
+
+  useEffect(()=>{
+    if(enrolledCourses.length > 0 && courseId){
+      getCourseData()
+    } else if(enrolledCourses.length === 0 && userData && courseId){
+      // If no enrolled courses but user is logged in, show message
+      setLoading(false)
+    }
+  }, [enrolledCourses, courseId, userData])
 
   const marklectureAsCompleted = async (lectureId)=>{
     try {
@@ -95,10 +114,43 @@ const Player = () => {
   }
 
   useEffect(()=>{
-    getCourseProgress()
-  },[])
+    if(courseId){
+      getCourseProgress()
+    }
+  },[courseId])
 
-  return courseData ? (
+  if (loading) {
+    return (
+      <div className='min-h-screen flex items-center justify-center'>
+        <div className='flex flex-col items-center space-y-4'>
+          <div className='w-16 sm:w-20 aspect-square border-4 border-gray-300 border-t-blue-400 rounded-full animate-spin'></div>
+          <p className='text-gray-600 text-center'>Đang tải khóa học...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!courseData) {
+    return (
+      <div className='min-h-screen flex items-center justify-center'>
+        <div className='flex flex-col items-center space-y-4'>
+          <svg className='w-16 h-16 text-gray-300 mb-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={1} d='M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' />
+          </svg>
+          <h3 className='text-lg font-semibold mb-2'>Không tìm thấy khóa học</h3>
+          <p className='text-sm mb-4'>Khóa học này có thể không tồn tại hoặc bạn chưa đăng ký.</p>
+          <button 
+            onClick={() => window.history.back()}
+            className='px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors'
+          >
+            Quay lại
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
     <>
     <div className='p-4 sm:p-10 flex-col-reverse md:grid md:grid-cols-2 gap-10 md:px-36'>
       {/* left column */}
@@ -149,7 +201,10 @@ const Player = () => {
         </div>
         <div className="flex items-center gap-2 py-3 mt-10">
           <h1 className="text-xl font-bold">Rate this Course:</h1>
-          <Rating initialRating={initialRating} onRate={handleRate}/>
+          <Rating initialRating={initialRating} onRate={(newRating) => {
+            setRating(newRating);
+            handleRate();
+          }}/>
         </div>
       </div>
       {/* right column */}
@@ -173,8 +228,7 @@ const Player = () => {
     </div>
     <Footer />
     </>
-
-  ) : <Loading />
+  )
 }
 
 export default Player
