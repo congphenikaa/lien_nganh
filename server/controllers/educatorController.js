@@ -1,5 +1,6 @@
 import { clerkClient} from '@clerk/express'
 import Course from '../models/Course.js'
+import CourseApprovalRequest from '../models/CourseApprovalRequest.js'
 import { v2 as cloudinary } from 'cloudinary'
 import { Purchase } from '../models/Purchase.js'
 import User from '../models/User.js'
@@ -106,12 +107,15 @@ export const addCourse = async (req, res) => {
 
         const parsedCourseData = await JSON.parse(courseData)
         parsedCourseData.educator = educatorId
+        parsedCourseData.isPublished = false // Khóa học mới sẽ không được xuất bản ngay
+        parsedCourseData.approvalStatus = 'pending' // Trạng thái ban đầu là pending approval
+        
         const newCourse = await Course.create(parsedCourseData)
         const imageUpload = await cloudinary.uploader.upload(imageFile.path)
         newCourse.courseThumbnail = imageUpload.secure_url
         await newCourse.save()
 
-        res.json({ success: true, message: 'Course Added Successfully'})
+        res.json({ success: true, message: 'Course created successfully. Submit for approval to publish.', courseId: newCourse._id})
 
     }catch (error) {
         res.json({ success: false, message: error.message})
@@ -194,4 +198,116 @@ export const getEnrolledStudentsData = async (req, res)=> {
         res.json({success:false, message: error.message});
     }
 
+}
+
+// Gửi yêu cầu phê duyệt khóa học
+export const submitCourseForApproval = async (req, res) => {
+    try {
+        const { courseId, submissionMessage = '' } = req.body;
+        const educatorId = req.auth().userId;
+
+        const course = await Course.findById(courseId);
+        if (!course) {
+            return res.json({ success: false, message: 'Course not found' });
+        }
+
+        if (course.educator !== educatorId) {
+            return res.json({ success: false, message: 'Unauthorized' });
+        }
+
+        if (course.approvalStatus === 'pending_approval') {
+            return res.json({ success: false, message: 'Course is already pending approval' });
+        }
+
+        if (course.approvalStatus === 'approved') {
+            return res.json({ success: false, message: 'Course is already approved and published' });
+        }
+
+        // Kiểm tra khóa học có đủ nội dung không
+        if (!course.courseContent || course.courseContent.length === 0) {
+            return res.json({ success: false, message: 'Course must have at least one chapter to submit for approval' });
+        }
+
+        // Tạo snapshot của khóa học
+        const courseSnapshot = {
+            courseTitle: course.courseTitle,
+            courseDescription: course.courseDescription,
+            coursePrice: course.coursePrice,
+            discount: course.discount,
+            courseThumbnail: course.courseThumbnail,
+            courseContent: course.courseContent
+        };
+
+        // Tạo yêu cầu phê duyệt
+        const approvalRequest = new CourseApprovalRequest({
+            courseId: course._id,
+            educator: educatorId,
+            submissionMessage,
+            courseSnapshot
+        });
+
+        await approvalRequest.save();
+
+        // Cập nhật trạng thái khóa học
+        course.approvalStatus = 'pending_approval';
+        course.latestApprovalRequest = approvalRequest._id;
+        await course.save();
+
+        res.json({
+            success: true,
+            message: 'Course submitted for approval successfully. You will be notified once reviewed.'
+        });
+
+    } catch (error) {
+        res.json({ success: false, message: error.message });
+    }
+}
+
+// Lấy trạng thái phê duyệt của khóa học
+export const getCourseApprovalStatus = async (req, res) => {
+    try {
+        const { courseId } = req.params;
+        const educatorId = req.auth().userId;
+
+        const course = await Course.findById(courseId)
+            .populate('latestApprovalRequest');
+
+        if (!course) {
+            return res.json({ success: false, message: 'Course not found' });
+        }
+
+        if (course.educator !== educatorId) {
+            return res.json({ success: false, message: 'Unauthorized' });
+        }
+
+        res.json({
+            success: true,
+            approvalStatus: course.approvalStatus,
+            isPublished: course.isPublished,
+            approvalRequest: course.latestApprovalRequest
+        });
+
+    } catch (error) {
+        res.json({ success: false, message: error.message });
+    }
+}
+
+// Lấy danh sách yêu cầu phê duyệt của educator
+export const getMyApprovalRequests = async (req, res) => {
+    try {
+        const educatorId = req.auth().userId;
+        
+        const approvalRequests = await CourseApprovalRequest.find({ educator: educatorId })
+            .populate('courseId', 'courseTitle courseThumbnail coursePrice approvalStatus isPublished')
+            .populate('adminResponse.reviewedBy', 'name email')
+            .sort({ submittedAt: -1 });
+
+        res.json({
+            success: true,
+            approvalRequests
+        });
+
+    } catch (error) {
+        res.json({ success: false, message: error.message });
+    }
 }

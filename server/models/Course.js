@@ -23,7 +23,7 @@ const courseSchema = new mongoose.Schema({
     courseDescription: { type: String, required: true},
     courseThumbnail: { type: String},
     coursePrice: { type: Number, required: true},
-    isPublished: { type: Boolean, default: true},
+    isPublished: { type: Boolean, default: false}, // Mặc định là chưa xuất bản
     discount: { type: Number, required: true, min: 0, max: 100},
     courseContent: [chapterSchema],
     courseRatings:[
@@ -32,7 +32,36 @@ const courseSchema = new mongoose.Schema({
     educator: {type: String, ref: 'User', required: true},
     enrolledStudents: [
         {type: String, ref: 'User'}
-    ]
+    ],
+    // Trạng thái phê duyệt đơn giản
+    approvalStatus: {
+        type: String,
+        enum: ['pending', 'approved', 'rejected'],
+        default: 'pending'
+    },
+    adminNote: {
+        type: String,
+        default: ''
+    },
+    approvedAt: {
+        type: Date
+    },
+    approvedBy: {
+        type: String,
+        ref: 'User'
+    },
+    rejectedAt: {
+        type: Date
+    },
+    rejectedBy: {
+        type: String,
+        ref: 'User'
+    },
+    // Lưu trữ yêu cầu phê duyệt gần nhất
+    latestApprovalRequest: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'CourseApprovalRequest'
+    }
     
 },{timestamps: true, minimize: false})
 

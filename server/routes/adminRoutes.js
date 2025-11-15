@@ -15,8 +15,16 @@ import {
     getCourseDetailAdmin,
     toggleCourseStatus,
     deleteCourse,
-    updateCourseInfo
+    updateCourseInfo,
+    approveCourse,
+    rejectCourse
 } from '../controllers/admin/courseController.js';
+
+import {
+    getAllApprovalRequests,
+    getApprovalRequestDetail,
+    updateApprovalRequestCourse
+} from '../controllers/admin/approvalController.js';
 
 import {
     getRevenueStats,
@@ -55,6 +63,8 @@ adminRouter.delete('/educator-requests/:requestId', protectAdmin, deleteEducator
 adminRouter.get('/courses', protectAdmin, getAllCoursesAdmin);
 adminRouter.get('/courses/:courseId', protectAdmin, getCourseDetailAdmin);
 adminRouter.put('/courses/:courseId/status', protectAdmin, toggleCourseStatus);
+adminRouter.put('/courses/:courseId/approve', protectAdmin, approveCourse);
+adminRouter.put('/courses/:courseId/reject', protectAdmin, rejectCourse);
 adminRouter.put('/courses/:courseId', protectAdmin, updateCourseInfo);
 adminRouter.delete('/courses/:courseId', protectAdmin, deleteCourse);
 
@@ -70,5 +80,10 @@ adminRouter.get('/reviews/stats', protectAdmin, getReviewStats);
 adminRouter.get('/reviews/courses', protectAdmin, getCoursesForFilter);
 adminRouter.delete('/reviews/:courseId/:reviewId', protectAdmin, deleteReview);
 adminRouter.post('/reviews/bulk-delete', protectAdmin, bulkDeleteReviews);
+
+// Course approval management routes (legacy - for backward compatibility)
+adminRouter.get('/approval-requests', protectAdmin, getAllApprovalRequests);
+adminRouter.get('/approval-requests/:requestId', protectAdmin, getApprovalRequestDetail);
+adminRouter.put('/approval-requests/:requestId/update', protectAdmin, updateApprovalRequestCourse);
 
 export default adminRouter

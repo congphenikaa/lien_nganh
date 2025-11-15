@@ -1,11 +1,12 @@
 import Course from '../../models/Course.js'
+import CourseApprovalRequest from '../../models/CourseApprovalRequest.js'
 import { Purchase } from '../../models/Purchase.js'
 import { CourseProgress } from '../../models/CourseProgress.js'
 import mongoose from 'mongoose'
 
 export const getAllCoursesAdmin = async (req, res) => {
     try {
-        const { page = 1, limit = 10, search = '', status = '' } = req.query;
+        const { page = 1, limit = 10, search = '', status = '', approvalStatus = '' } = req.query;
         
         const query = {};
         if (search) {
@@ -14,9 +15,13 @@ export const getAllCoursesAdmin = async (req, res) => {
         if (status) {
             query.isPublished = status === 'published';
         }
+        if (approvalStatus) {
+            query.approvalStatus = approvalStatus;
+        }
 
         const courses = await Course.find(query)
             .populate('educator', 'name email')
+            .populate('latestApprovalRequest')
             .select('-courseContent')
             .limit(limit * 1)
             .skip((page - 1) * limit)
@@ -95,6 +100,67 @@ export const getCourseDetailAdmin = async (req, res) => {
     }
 }
 
+// Approve course - set status to approved and make it publishable
+export const approveCourse = async (req, res) => {
+    try {
+        const { courseId } = req.params;
+        const { adminNote } = req.body;
+
+        const course = await Course.findById(courseId);
+        if (!course) {
+            return res.json({ success: false, message: 'Course not found' });
+        }
+
+        // Update course approval status
+        course.approvalStatus = 'approved';
+        course.isPublished = true; // Auto-publish when approved
+        course.adminNote = adminNote || '';
+        course.approvedAt = new Date();
+        course.approvedBy = req.auth().userId;
+
+        await course.save();
+
+        res.json({
+            success: true,
+            message: 'Course approved and published successfully',
+            course
+        });
+    } catch (error) {
+        res.json({ success: false, message: error.message });
+    }
+}
+
+// Reject course - set status to rejected and unpublish
+export const rejectCourse = async (req, res) => {
+    try {
+        const { courseId } = req.params;
+        const { adminNote } = req.body;
+
+        const course = await Course.findById(courseId);
+        if (!course) {
+            return res.json({ success: false, message: 'Course not found' });
+        }
+
+        // Update course approval status
+        course.approvalStatus = 'rejected';
+        course.isPublished = false; // Auto-unpublish when rejected
+        course.adminNote = adminNote || '';
+        course.rejectedAt = new Date();
+        course.rejectedBy = req.auth().userId;
+
+        await course.save();
+
+        res.json({
+            success: true,
+            message: 'Course rejected and unpublished successfully',
+            course
+        });
+    } catch (error) {
+        res.json({ success: false, message: error.message });
+    }
+}
+
+// Toggle publish status (only for approved courses)
 export const toggleCourseStatus = async (req, res) => {
     try {
         const { courseId } = req.params;
@@ -102,6 +168,14 @@ export const toggleCourseStatus = async (req, res) => {
         
         if (!course) {
             return res.json({ success: false, message: 'Course not found' });
+        }
+
+        // Chỉ cho phép publish nếu course đã được approved
+        if (!course.isPublished && course.approvalStatus !== 'approved') {
+            return res.json({
+                success: false,
+                message: 'Course must be approved before it can be published'
+            });
         }
 
         course.isPublished = !course.isPublished;
@@ -121,30 +195,58 @@ export const deleteCourse = async (req, res) => {
     try {
         const { courseId } = req.params;
         
+        // Validate courseId format
+        if (!courseId || courseId.length !== 24) {
+            return res.status(400).json({ success: false, message: 'Invalid course ID format' });
+        }
+        
         const course = await Course.findById(courseId);
         if (!course) {
-            return res.json({ success: false, message: 'Course not found' });
+            return res.status(404).json({ success: false, message: 'Course not found' });
         }
 
-        // Check if course has enrolled students
-        if (course.enrolledStudents.length > 0) {
-            return res.json({
-                success: false,
-                message: 'Cannot delete course with enrolled students'
+        // For admin, allow force delete with confirmation
+        const { forceDelete } = req.query;
+        
+        if (!forceDelete) {
+            // Check if course has enrolled students
+            if (course.enrolledStudents && course.enrolledStudents.length > 0) {
+                return res.json({
+                    success: false,
+                    message: 'Course has enrolled students. Use force delete to proceed.',
+                    requiresForceDelete: true
+                });
+            }
+
+            // Check if there are any completed purchases
+            const completedPurchases = await Purchase.countDocuments({ 
+                courseId, 
+                status: 'completed' 
             });
+            
+            if (completedPurchases > 0) {
+                return res.json({
+                    success: false,
+                    message: 'Course has been purchased by students. Use force delete to proceed.',
+                    requiresForceDelete: true
+                });
+            }
         }
 
+        // Clean up related data first
+        await Promise.all([
+            Purchase.deleteMany({ courseId }),
+            CourseProgress.deleteMany({ courseId }),
+            CourseApprovalRequest.deleteMany({ courseId })
+        ]);
+        
+        // Delete the course
         await Course.findByIdAndDelete(courseId);
-        
-        // Clean up related purchases
-        await Purchase.deleteMany({ courseId });
-        
-        // Clean up course progress
-        await CourseProgress.deleteMany({ courseId });
 
         res.json({ success: true, message: 'Course deleted successfully' });
     } catch (error) {
-        res.json({ success: false, message: error.message });
+        console.error('Delete course error:', error);
+        res.status(500).json({ success: false, message: error.message });
     }
 }
 

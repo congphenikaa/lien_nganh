@@ -1,5 +1,5 @@
 // components/admin/CourseManagement.jsx
-import React, { useState, useEffect, useContext } from 'react'
+import React, { useState, useEffect, useContext, useCallback } from 'react'
 import { AppContext } from '../../context/AppContext'
 import axios from 'axios'
 import { toast } from 'react-toastify'
@@ -10,18 +10,21 @@ const CourseManagement = () => {
   const [selectedCourse, setSelectedCourse] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [approvalFilter, setApprovalFilter] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+  // const [approvalRequests, setApprovalRequests] = useState([])
   const { backendUrl, getToken } = useContext(AppContext)
 
-  const fetchCourses = async (page = 1) => {
+  const fetchCourses = useCallback(async (page = 1) => {
     try {
       const token = await getToken()
       const params = new URLSearchParams({
         page: page.toString(),
         limit: '10',
         ...(searchTerm && { search: searchTerm }),
-        ...(statusFilter && { status: statusFilter })
+        ...(statusFilter && { status: statusFilter }),
+        ...(approvalFilter && { approvalStatus: approvalFilter })
       })
 
       const { data } = await axios.get(
@@ -36,12 +39,23 @@ const CourseManagement = () => {
       } else {
         toast.error(data.message)
       }
+
+      // Fetch pending approval requests
+      const approvalParams = new URLSearchParams({ status: 'pending' })
+      const approvalResponse = await axios.get(
+        `${backendUrl}/api/admin/approval-requests?${approvalParams}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      
+      if (approvalResponse.data.success) {
+        // setApprovalRequests(approvalResponse.data.approvalRequests)
+      }
     } catch (error) {
       toast.error(error.message)
     } finally {
       setLoading(false)
     }
-  }
+  }, [backendUrl, getToken, searchTerm, statusFilter, approvalFilter])
 
   const toggleCourseStatus = async (courseId, currentStatus) => {
     try {
@@ -63,26 +77,42 @@ const CourseManagement = () => {
     }
   }
 
-  const deleteCourse = async (courseId) => {
-    if (!window.confirm('Are you sure you want to delete this course? This action cannot be undone.')) {
-      return
-    }
-
+  const deleteCourse = async (courseId, forceDelete = false) => {
     try {
+      if (!courseId) {
+        toast.error('Invalid course ID')
+        return
+      }
+
       const token = await getToken()
-      const { data } = await axios.delete(
-        `${backendUrl}/api/admin/courses/${courseId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
+      const url = forceDelete 
+        ? `${backendUrl}/api/admin/courses/${courseId}?forceDelete=true`
+        : `${backendUrl}/api/admin/courses/${courseId}`
+        
+      const { data } = await axios.delete(url, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
 
       if (data.success) {
         toast.success(data.message)
         fetchCourses(currentPage)
       } else {
-        toast.error(data.message)
+        // Handle force delete requirement
+        if (data.requiresForceDelete) {
+          const confirmed = window.confirm(
+            `${data.message}\n\nThis will permanently delete the course and all related data. Do you want to proceed?`
+          )
+          if (confirmed) {
+            deleteCourse(courseId, true) // Retry with force delete
+          }
+        } else {
+          toast.error(data.message)
+        }
       }
     } catch (error) {
-      toast.error(error.message)
+      console.error('Delete course error:', error)
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to delete course'
+      toast.error(errorMessage)
     }
   }
 
@@ -107,9 +137,64 @@ const CourseManagement = () => {
     }
   }
 
+  const approveCourse = async (courseId, adminNote = '') => {
+    try {
+      const token = await getToken()
+      const { data } = await axios.put(
+        `${backendUrl}/api/admin/courses/${courseId}/approve`,
+        { adminNote },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+
+      if (data.success) {
+        toast.success('Course approved and published successfully')
+        fetchCourses(currentPage)
+      } else {
+        toast.error(data.message)
+      }
+    } catch (error) {
+      toast.error(error.message)
+    }
+  }
+
+  const rejectCourse = async (courseId, adminNote) => {
+    try {
+      const token = await getToken()
+      const { data } = await axios.put(
+        `${backendUrl}/api/admin/courses/${courseId}/reject`,
+        { adminNote },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+
+      if (data.success) {
+        toast.success('Course rejected and unpublished successfully')
+        fetchCourses(currentPage)
+      } else {
+        toast.error(data.message)
+      }
+    } catch (error) {
+      toast.error(error.message)
+    }
+  }
+
   useEffect(() => {
     fetchCourses()
-  }, [searchTerm, statusFilter])
+  }, [searchTerm, statusFilter, approvalFilter, fetchCourses])
+
+  const getApprovalStatusBadge = (status) => {
+    const statusConfig = {
+      pending: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Pending' },
+      approved: { bg: 'bg-green-100', text: 'text-green-800', label: 'Approved' },
+      rejected: { bg: 'bg-red-100', text: 'text-red-800', label: 'Rejected' }
+    }
+    
+    const config = statusConfig[status] || statusConfig.pending
+    return (
+      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${config.bg} ${config.text}`}>
+        {config.label}
+      </span>
+    )
+  }
 
   if (loading) {
     return (
@@ -146,6 +231,17 @@ const CourseManagement = () => {
             <option value='published'>Published</option>
             <option value='unpublished'>Unpublished</option>
           </select>
+          
+          <select
+            value={approvalFilter}
+            onChange={(e) => setApprovalFilter(e.target.value)}
+            className='px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500'
+          >
+            <option value=''>All Approval Status</option>
+            <option value='pending'>Pending</option>
+            <option value='approved'>Approved</option>
+            <option value='rejected'>Rejected</option>
+          </select>
         </div>
       </div>
 
@@ -175,7 +271,10 @@ const CourseManagement = () => {
                     Students
                   </th>
                   <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                    Status
+                    Publish Status
+                  </th>
+                  <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                    Approval Status
                   </th>
                   <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
                     Actions
@@ -227,6 +326,9 @@ const CourseManagement = () => {
                         {course.isPublished ? 'Published' : 'Unpublished'}
                       </span>
                     </td>
+                    <td className='px-6 py-4 whitespace-nowrap'>
+                      {getApprovalStatusBadge(course.approvalStatus || 'pending')}
+                    </td>
                     <td className='px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2'>
                       <button
                         onClick={() => setSelectedCourse(course)}
@@ -234,25 +336,73 @@ const CourseManagement = () => {
                       >
                         View
                       </button>
+                      
+                      {course.approvalStatus === 'pending' ? (
+                        <>
+                          <button
+                            onClick={() => {
+                              const adminNote = window.prompt('Enter admin note (optional):') || 'Course approved by admin'
+                              if (window.confirm('Approve this course? It will be automatically published.')) {
+                                approveCourse(course._id, adminNote)
+                              }
+                            }}
+                            className='text-green-600 hover:text-green-900'
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => {
+                              const adminNote = window.prompt('Please provide a reason for rejection:')
+                              if (adminNote) {
+                                if (window.confirm('Reject this course? It will be automatically unpublished.')) {
+                                  rejectCourse(course._id, adminNote)
+                                }
+                              }
+                            }}
+                            className='text-red-600 hover:text-red-900'
+                          >
+                            Reject
+                          </button>
+                        </>
+                      ) : course.approvalStatus === 'approved' ? (
+                        <button
+                          onClick={() => toggleCourseStatus(course._id, course.isPublished)}
+                          className={`${
+                            course.isPublished
+                              ? 'text-orange-600 hover:text-orange-900'
+                              : 'text-green-600 hover:text-green-900'
+                          }`}
+                        >
+                          {course.isPublished ? 'Unpublish' : 'Publish'}
+                        </button>
+                      ) : course.approvalStatus === 'rejected' ? (
+                        <button
+                          onClick={() => {
+                            const adminNote = window.prompt('Enter admin note (optional):') || 'Course re-approved by admin'
+                            if (window.confirm('Re-approve this course? It will be automatically published.')) {
+                              approveCourse(course._id, adminNote)
+                            }
+                          }}
+                          className='text-blue-600 hover:text-blue-900'
+                        >
+                          Re-approve
+                        </button>
+                      ) : (
+                        <span className='text-gray-400 text-sm'>No actions available</span>
+                      )}
+                      
                       <button
-                        onClick={() => toggleCourseStatus(course._id, course.isPublished)}
-                        className={`${
-                          course.isPublished
-                            ? 'text-orange-600 hover:text-orange-900'
-                            : 'text-green-600 hover:text-green-900'
-                        }`}
-                      >
-                        {course.isPublished ? 'Unpublish' : 'Publish'}
-                      </button>
-                      <button
-                        onClick={() => deleteCourse(course._id)}
+                        onClick={() => {
+                          if (!course._id) {
+                            toast.error('Invalid course ID')
+                            return
+                          }
+                          if (window.confirm('Are you sure you want to delete this course?')) {
+                            deleteCourse(course._id)
+                          }
+                        }}
                         className='text-red-600 hover:text-red-900'
-                        disabled={course.enrolledStudents?.length > 0}
-                        title={
-                          course.enrolledStudents?.length > 0
-                            ? 'Cannot delete course with enrolled students'
-                            : 'Delete course'
-                        }
+                        title='Delete course'
                       >
                         Delete
                       </button>
@@ -450,10 +600,28 @@ const CourseDetailModal = ({ course, onClose, onUpdate }) => {
                 <p className='text-sm text-gray-900'>{course.enrolledStudents?.length || 0}</p>
               </div>
               <div>
-                <label className='block text-sm font-medium text-gray-700'>Status</label>
+                <label className='block text-sm font-medium text-gray-700'>Publish Status</label>
                 <p className='text-sm text-gray-900'>
                   {course.isPublished ? 'Published' : 'Unpublished'}
                 </p>
+              </div>
+              <div>
+                <label className='block text-sm font-medium text-gray-700'>Approval Status</label>
+                <div className='mt-1'>
+                  {(() => {
+                    const statusConfig = {
+                      pending: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Pending' },
+                      approved: { bg: 'bg-green-100', text: 'text-green-800', label: 'Approved' },
+                      rejected: { bg: 'bg-red-100', text: 'text-red-800', label: 'Rejected' }
+                    }
+                    const config = statusConfig[course.approvalStatus || 'pending'] || statusConfig.pending
+                    return (
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${config.bg} ${config.text}`}>
+                        {config.label}
+                      </span>
+                    )
+                  })()}
+                </div>
               </div>
             </div>
 
