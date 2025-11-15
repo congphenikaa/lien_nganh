@@ -7,10 +7,34 @@ import crypto from 'crypto'
 export const getUserData = async (req,res)=>{
     try {
         const userId = req.auth.userId // Sửa từ req.auth().userId
-        const user = await User.findById(userId)
+        console.log('🔍 getUserData called for userId:', userId);
+        
+        let user = await User.findById(userId)
+        console.log('🔍 User found in DB:', !!user);
         
         if(!user){
-            return res.json({success: false, message: 'User Not Found'})
+            console.log('🔧 User not found, attempting to create from Clerk data...');
+            
+            // Lấy thông tin từ Clerk session
+            const clerkUser = req.auth;
+            console.log('🔍 Clerk user data available:', !!clerkUser.sessionClaims);
+            
+            try {
+                // Tạo user mới với thông tin từ Clerk
+                user = new User({
+                    _id: userId,
+                    name: clerkUser.sessionClaims?.name || clerkUser.sessionClaims?.email?.split('@')[0] || 'User',
+                    email: clerkUser.sessionClaims?.email || '',
+                    imageUrl: clerkUser.sessionClaims?.image_url || clerkUser.sessionClaims?.imageUrl || '',
+                    enrolledCourses: []
+                });
+                
+                await user.save();
+                console.log('✅ User created successfully:', user.name);
+            } catch (createError) {
+                console.error('❌ Failed to create user:', createError);
+                return res.json({success: false, message: 'Failed to create user profile'})
+            }
         }
         
         res.json({success: true, user})

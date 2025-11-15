@@ -38,12 +38,13 @@ export const AppContextProvider = (props) => {
     const fetchUserData = async (retryCount = 0) => {
       console.log('=== FETCH USER DATA IN CONTEXT ===');
       console.log('User available:', !!user);
+      console.log('User ID:', user?.id);
       console.log('Backend URL:', backendUrl);
       console.log('Retry attempt:', retryCount);
       
       // Wait for user to be fully loaded
-      if (!user) {
-        console.log('❌ User not available, skipping fetch');
+      if (!user || !user.id) {
+        console.log('❌ User or User ID not available, skipping fetch');
         return;
       }
       
@@ -91,16 +92,19 @@ export const AppContextProvider = (props) => {
         }else{
           console.error('❌ API returned error:', data.message);
           
-          // Retry up to 3 times with increasing delay
-          if(retryCount < 3 && data.message === 'User not authenticated') {
-            console.log(`🔄 Retrying fetchUserData in ${(retryCount + 1) * 1000}ms...`);
+          // Retry for both authentication and user not found errors
+          if(retryCount < 3 && (data.message === 'User not authenticated' || data.message === 'User Not Found')) {
+            console.log(`🔄 Retrying fetchUserData in ${(retryCount + 1) * 1000}ms... (attempt ${retryCount + 1})`);
             setTimeout(() => {
               fetchUserData(retryCount + 1);
             }, (retryCount + 1) * 1000);
             return;
           }
           
-          toast.error(data.message)
+          // Only show toast error if not a user creation issue
+          if(data.message !== 'User Not Found' && data.message !== 'Failed to create user profile') {
+            toast.error(data.message)
+          }
         }
       } catch (error) {
         console.error('❌ Error fetching user data:', error);

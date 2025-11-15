@@ -22,6 +22,44 @@ const Player = () => {
   const [rating, setRating] = useState(0)
   const [loading, setLoading] = useState(true)
 
+  // Helper function to extract YouTube video ID from various URL formats
+  const getYouTubeVideoId = (url) => {
+    if (!url) return null;
+    
+    // If it's already just a video ID (11 characters)
+    if (url.length === 11 && !url.includes('http') && !url.includes('/')) {
+      return url;
+    }
+    
+    // Handle various YouTube URL formats
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&#?]*)/,
+      /youtube\.com\/v\/([^&#?]*)/,
+      /youtube\.com\/watch\?.*v=([^&#]*)/
+    ];
+    
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match && match[1]) {
+        // Remove any additional parameters (like &list=...)
+        return match[1].split('&')[0];
+      }
+    }
+    
+    // If no pattern matches, try to extract from the end of the URL
+    const lastPart = url.split('/').pop();
+    if (lastPart && lastPart.includes('v=')) {
+      return lastPart.split('v=')[1].split('&')[0];
+    }
+    
+    // Last resort: if it contains & but no http, assume it's a video ID with parameters
+    if (url.includes('&') && !url.includes('http')) {
+      return url.split('&')[0];
+    }
+    
+    return null;
+  }
+
   const getCourseData = useCallback(()=>{
     console.log('Getting course data for courseId:', courseId)
     console.log('Enrolled courses:', enrolledCourses ? enrolledCourses.length : 0)
@@ -219,7 +257,29 @@ const Player = () => {
       <div className="md:mt-10">
         {playerData ? (
           <div >
-            <YouTube videoId={playerData.lectureUrl.split('/').pop()} iframeClassName="w-full aspect-video"/>
+            {/* Debug info - you can remove this after testing */}
+            <div className="mb-2 p-2 bg-gray-100 text-xs rounded">
+              <p><strong>Original URL:</strong> {playerData.lectureUrl}</p>
+              <p><strong>Extracted Video ID:</strong> {getYouTubeVideoId(playerData.lectureUrl)}</p>
+            </div>
+            
+            <YouTube 
+              videoId={getYouTubeVideoId(playerData.lectureUrl)} 
+              iframeClassName="w-full aspect-video"
+              opts={{
+                height: '390',
+                width: '640',
+                playerVars: {
+                  autoplay: 0,
+                  modestbranding: 1,
+                  rel: 0
+                }
+              }}
+              onError={(e) => {
+                console.error('YouTube Player Error:', e);
+                toast.error('Lỗi khi tải video. Vui lòng kiểm tra URL video.');
+              }}
+            />
             <div className="flex justify-between items-center mt-1">
               <p>{playerData.chapter}.{playerData.lecture} {playerData.lectureTitle}</p>
               <button onClick={()=> marklectureAsCompleted(playerData.lectureId)} className="text-blue-600">{progressData && progressData.lectureCompleted.includes(playerData.lectureId) ? 'Completed' : 'Mark Complete'}</button>
