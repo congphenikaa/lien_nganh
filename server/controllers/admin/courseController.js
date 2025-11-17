@@ -3,6 +3,8 @@ import CourseApprovalRequest from '../../models/CourseApprovalRequest.js'
 import { Purchase } from '../../models/Purchase.js'
 import { CourseProgress } from '../../models/CourseProgress.js'
 import mongoose from 'mongoose'
+import { v2 as cloudinary } from 'cloudinary'
+import multer from 'multer'
 
 export const getAllCoursesAdmin = async (req, res) => {
     try {
@@ -22,7 +24,7 @@ export const getAllCoursesAdmin = async (req, res) => {
         const courses = await Course.find(query)
             .populate('educator', 'name email')
             .populate('latestApprovalRequest')
-            .select('-courseContent')
+            .select('-courseContent') // Exclude courseContent for performance in list view
             .limit(limit * 1)
             .skip((page - 1) * limit)
             .sort({ createdAt: -1 });
@@ -250,30 +252,106 @@ export const deleteCourse = async (req, res) => {
     }
 }
 
-export const updateCourseInfo = async (req, res) => {
-    try {
-        const { courseId } = req.params;
-        const { courseTitle, courseDescription, coursePrice, discount } = req.body;
-
-        const course = await Course.findById(courseId);
-        if (!course) {
-            return res.json({ success: false, message: 'Course not found' });
+// Configure multer for memory storage
+const storage = multer.memoryStorage();
+const uploadMiddleware = multer({ 
+    storage,
+    limits: {
+        fileSize: 5 * 1024 * 1024 // 5MB limit
+    },
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype.startsWith('image/')) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only image files are allowed'), false);
         }
-
-        // Update fields
-        if (courseTitle) course.courseTitle = courseTitle;
-        if (courseDescription) course.courseDescription = courseDescription;
-        if (coursePrice !== undefined) course.coursePrice = coursePrice;
-        if (discount !== undefined) course.discount = discount;
-
-        await course.save();
-
-        res.json({
-            success: true,
-            message: 'Course updated successfully',
-            course
-        });
-    } catch (error) {
-        res.json({ success: false, message: error.message });
     }
-}
+});
+
+export const updateCourseInfo = [
+    // Use multer middleware to handle FormData
+    uploadMiddleware.single('image'),
+    
+    async (req, res) => {
+        try {
+            const { courseId } = req.params;
+
+            const course = await Course.findById(courseId);
+            if (!course) {
+                return res.json({ success: false, message: 'Course not found' });
+            }
+
+            let updateData;
+            let newImageUrl = null;
+
+            // Check if there's courseData in FormData
+            if (req.body.courseData) {
+                // Handle FormData request (with potential image)
+                try {
+                    updateData = JSON.parse(req.body.courseData);
+                } catch (parseError) {
+                    return res.json({ success: false, message: 'Invalid course data format' });
+                }
+
+                // Handle image upload to Cloudinary if file exists
+                if (req.file) {
+                    try {
+                        const uploadResult = await new Promise((resolve, reject) => {
+                            cloudinary.uploader.upload_stream(
+                                { 
+                                    resource_type: 'image',
+                                    folder: 'course_thumbnails',
+                                    transformation: [
+                                        { width: 400, height: 300, crop: 'fill', quality: 'auto' }
+                                    ]
+                                },
+                                (error, result) => {
+                                    if (error) reject(error);
+                                    else resolve(result);
+                                }
+                            ).end(req.file.buffer);
+                        });
+                        newImageUrl = uploadResult.secure_url;
+                    } catch (uploadError) {
+                        console.error('Cloudinary upload error:', uploadError);
+                        return res.json({ success: false, message: 'Image upload failed' });
+                    }
+                }
+            } else {
+                // Handle regular JSON request (no image)
+                updateData = req.body;
+            }
+
+            // Update course fields
+            if (updateData.courseTitle) course.courseTitle = updateData.courseTitle;
+            if (updateData.courseDescription) course.courseDescription = updateData.courseDescription;
+            if (updateData.coursePrice !== undefined) course.coursePrice = Number(updateData.coursePrice);
+            if (updateData.discount !== undefined) course.discount = Number(updateData.discount);
+            if (updateData.courseContent) {
+                // Validate courseContent structure
+                if (Array.isArray(updateData.courseContent)) {
+                    course.courseContent = updateData.courseContent;
+                }
+            }
+            if (newImageUrl) course.courseThumbnail = newImageUrl;
+
+            // Update modified date
+            course.updatedAt = new Date();
+
+            await course.save();
+
+            // Populate course for response
+            await course.populate('educator', 'name email');
+
+            res.json({
+                success: true,
+                message: 'Course updated successfully',
+                course: course.toObject()
+            });
+
+        } catch (error) {
+            console.error('Course update error:', error);
+            res.json({ success: false, message: error.message });
+        }
+    }
+];

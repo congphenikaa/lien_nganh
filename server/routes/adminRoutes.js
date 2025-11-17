@@ -77,7 +77,7 @@ adminRouter.get('/courses/:courseId', protectAdmin, getCourseDetailAdmin);
 adminRouter.put('/courses/:courseId/status', protectAdmin, toggleCourseStatus);
 adminRouter.put('/courses/:courseId/approve', protectAdmin, approveCourse);
 adminRouter.put('/courses/:courseId/reject', protectAdmin, rejectCourse);
-adminRouter.put('/courses/:courseId', protectAdmin, updateCourseInfo);
+adminRouter.put('/courses/:courseId', protectAdmin, ...updateCourseInfo); // Handle array middleware
 adminRouter.delete('/courses/:courseId', protectAdmin, deleteCourse);
 
 // Revenue & analytics - ADD protectAdmin middleware
