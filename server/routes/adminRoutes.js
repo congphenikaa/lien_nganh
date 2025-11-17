@@ -7,7 +7,8 @@ import {
     getEducatorRequests,
     reviewEducatorRequest,
     cleanupOldRequests,
-    deleteEducatorRequest
+    deleteEducatorRequest,
+    cleanupOrphanedUsers
 } from '../controllers/adminController.js'
 
 import {
@@ -41,6 +42,16 @@ import {
     bulkDeleteReviews
 } from '../controllers/admin/ratingController.js';
 
+import {
+    searchCourses,
+    getEnrollments,
+    searchStudents,
+    addStudent,
+    removeStudent,
+    exportEnrollments,
+    notifyClass
+} from '../controllers/enrollmentController.js';
+
 import { protectAdmin } from '../middlewares/authMiddleware.js'
 
 const adminRouter = express.Router()
@@ -52,6 +63,7 @@ adminRouter.get('/stats', protectAdmin, getAdminStats)
 adminRouter.get('/users', protectAdmin, getAllUsers)
 adminRouter.put('/users/:userId/role', protectAdmin, updateUserRole)
 adminRouter.put('/users/:userId/status', protectAdmin, toggleUserStatus)
+adminRouter.delete('/users/cleanup-orphaned', protectAdmin, cleanupOrphanedUsers)
 
 // Educator request management
 adminRouter.get('/educator-requests', protectAdmin, getEducatorRequests)
@@ -85,5 +97,14 @@ adminRouter.post('/reviews/bulk-delete', protectAdmin, bulkDeleteReviews);
 adminRouter.get('/approval-requests', protectAdmin, getAllApprovalRequests);
 adminRouter.get('/approval-requests/:requestId', protectAdmin, getApprovalRequestDetail);
 adminRouter.put('/approval-requests/:requestId/update', protectAdmin, updateApprovalRequestCourse);
+
+// Enrollment management routes
+adminRouter.get('/enrollments/search-courses', protectAdmin, searchCourses);
+adminRouter.get('/enrollments/search-students', protectAdmin, searchStudents);
+adminRouter.get('/enrollments/:courseId', protectAdmin, getEnrollments);
+adminRouter.post('/enrollments/add-student', protectAdmin, addStudent);
+adminRouter.delete('/enrollments/remove-student', protectAdmin, removeStudent);
+adminRouter.get('/enrollments/export/:courseId', protectAdmin, exportEnrollments);
+adminRouter.post('/enrollments/notify-class', protectAdmin, notifyClass);
 
 export default adminRouter

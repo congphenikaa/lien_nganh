@@ -2,6 +2,7 @@ import {Webhook} from "svix";
 import User from "../models/User.js";
 import { Purchase } from "../models/Purchase.js"
 import Course from "../models/Course.js"
+import Enrollment from "../models/Enrollment.js"
 import crypto from 'crypto'
 
 //API Controller Function to manage Clerk User with database
@@ -19,11 +20,18 @@ export const clerkWebhooks = async (req, res)=>{
         const {data, type} = req.body
         switch (type) {
             case 'user.created': {
+                // Get role from Clerk metadata (public or private)
+                const clerkRole = data.public_metadata?.role || 
+                                 data.private_metadata?.role || 
+                                 'student'; // Default to student
+                
                 const userData = {
                     _id: data.id,
+                    clerkId: data.id, // Save Clerk ID
                     email: data.email_addresses[0].email_address,
                     name: data.first_name + " " + data.last_name,
                     imageUrl: data.image_url,
+                    role: clerkRole // Cache role from Clerk metadata
                 }
                 await User.create(userData)
                 res.json({})
@@ -31,10 +39,17 @@ export const clerkWebhooks = async (req, res)=>{
             }
 
             case 'user.updated': {
+                // Get updated role from Clerk metadata
+                const clerkRole = data.public_metadata?.role || 
+                                 data.private_metadata?.role || 
+                                 'student'; // Default to student
+                
                 const userData = {
+                    clerkId: data.id, // Ensure clerkId is saved
                     email: data.email_addresses[0].email_address,
                     name: data.first_name + " " + data.last_name,
                     imageUrl: data.image_url,
+                    role: clerkRole // Update cached role from Clerk metadata
                 }
                 await User.findByIdAndUpdate(data.id, userData)
                 res.json({})
@@ -193,6 +208,18 @@ const processEnrollment = async (purchase) => {
       course.enrolledStudents.push(userId);
       await course.save();
       console.log('✅ ADDED USER TO COURSE');
+    }
+
+    // Tạo Enrollment record cho enrollment management
+    const existingEnrollment = await Enrollment.findOne({ student: userId, course: courseId });
+    if (!existingEnrollment) {
+      await Enrollment.create({
+        student: userId,
+        course: courseId,
+        enrollmentType: 'purchase',
+        status: 'active'
+      });
+      console.log('✅ CREATED ENROLLMENT RECORD');
     }
 
     console.log('🎉🎉🎉 ENROLLMENT COMPLETED SUCCESSFULLY!');

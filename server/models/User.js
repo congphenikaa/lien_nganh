@@ -7,6 +7,12 @@ const userSchema = new mongoose.Schema(
         name: {type: String, require: true},
         email: {type: String, require: true},
         imageUrl: {type: String, default: ''},
+        clerkId: {type: String, require: true}, // Clerk user ID for role management
+        role: {
+            type: String,
+            enum: ['student', 'educator', 'admin'],
+            default: 'student' // Optional cache field, actual role comes from Clerk
+        },
         enrolledCourses: [
             {
                 type: mongoose.Schema.Types.ObjectId,

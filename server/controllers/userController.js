@@ -2,6 +2,7 @@ import User from "../models/User.js"
 import { Purchase } from "../models/Purchase.js"
 import { CourseProgress } from "../models/CourseProgress.js"
 import Course from "../models/Course.js"
+import Enrollment from "../models/Enrollment.js"
 import crypto from 'crypto'
 
 export const getUserData = async (req,res)=>{
@@ -19,13 +20,21 @@ export const getUserData = async (req,res)=>{
             const clerkUser = req.auth;
             console.log('🔍 Clerk user data available:', !!clerkUser.sessionClaims);
             
+            // Get role from Clerk metadata
+            const clerkRole = clerkUser.sessionClaims?.metadata?.role || 
+                             clerkUser.sessionClaims?.publicMetadata?.role ||
+                             clerkUser.sessionClaims?.privateMetadata?.role ||
+                             'student'; // Default to student
+            
             try {
                 // Tạo user mới với thông tin từ Clerk
                 user = new User({
                     _id: userId,
+                    clerkId: userId, // Save Clerk ID
                     name: clerkUser.sessionClaims?.name || clerkUser.sessionClaims?.email?.split('@')[0] || 'User',
                     email: clerkUser.sessionClaims?.email || '',
                     imageUrl: clerkUser.sessionClaims?.image_url || clerkUser.sessionClaims?.imageUrl || '',
+                    role: clerkRole, // Cache role from Clerk
                     enrolledCourses: []
                 });
                 
@@ -37,7 +46,20 @@ export const getUserData = async (req,res)=>{
             }
         }
         
-        res.json({success: true, user})
+        // Get current role from Clerk metadata (always fresh)
+        const currentRole = req.auth.sessionClaims?.metadata?.role || 
+                           req.auth.sessionClaims?.publicMetadata?.role ||
+                           req.auth.sessionClaims?.privateMetadata?.role ||
+                           user.role || // Fallback to cached role
+                           'student'; // Ultimate fallback
+        
+        // Return user data with fresh role from Clerk
+        const userData = {
+            ...user.toObject(),
+            role: currentRole
+        };
+        
+        res.json({success: true, user: userData})
     } catch (error) {
         console.error('❌ Error in getUserData:', error);
         res.json({success: false, message: error.message})
@@ -180,6 +202,19 @@ export const handlePaymentCallback = async (req, res) => {
           course.enrolledStudents.push(user._id)
           await course.save()
         }
+        
+        // Tạo Enrollment record cho enrollment management
+        const existingEnrollment = await Enrollment.findOne({ student: user._id, course: course._id });
+        if (!existingEnrollment) {
+          await Enrollment.create({
+            student: user._id,
+            course: course._id,
+            enrollmentType: 'purchase',
+            status: 'active'
+          });
+          console.log('✅ Created Enrollment record for:', user.name);
+        }
+        
       }
 
       return res.redirect(`${process.env.FRONTEND_URL}/my-enrollments?success=true`)

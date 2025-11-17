@@ -33,17 +33,31 @@ export const getAdminStats = async (req, res) => {
 // Get all users with their roles
 export const getAllUsers = async (req, res) => {
     try {
-        const users = await User.find()
-        const clerkUsers = await clerkClient.users.getUserList()
+        // Lấy tất cả users từ Clerk trước (nguồn tin cậy)
+        const clerkUsers = await clerkClient.users.getUserList({ limit: 500 }) // Tăng limit để lấy hết
         
-        const usersWithRoles = users.map(user => {
-            const clerkUser = clerkUsers.data.find(cu => cu.id === user._id)
-            return {
-                ...user.toObject(),
-                role: clerkUser?.publicMetadata?.role || 'student',
-                isActive: !clerkUser?.banned
+        // Chỉ lấy users có thực trong Clerk và có profile trong database
+        const usersWithRoles = []
+        
+        for (const clerkUser of clerkUsers.data) {
+            // Tìm user profile trong database
+            const userProfile = await User.findById(clerkUser.id)
+            
+            if (userProfile) {
+                usersWithRoles.push({
+                    ...userProfile.toObject(),
+                    role: clerkUser.publicMetadata?.role || 'student',
+                    isActive: !clerkUser.banned,
+                    email: clerkUser.emailAddresses[0]?.emailAddress || '',
+                    firstName: clerkUser.firstName || '',
+                    lastName: clerkUser.lastName || '',
+                    createdAt: clerkUser.createdAt
+                })
             }
-        })
+        }
+        
+        // Sắp xếp theo ngày tạo mới nhất
+        usersWithRoles.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
         
         res.json({ success: true, users: usersWithRoles })
     } catch (error) {
@@ -199,6 +213,46 @@ export const deleteEducatorRequest = async (req, res) => {
             message: 'Request deleted successfully' 
         })
     } catch (error) {
+        res.json({ success: false, message: error.message })
+    }
+}
+
+// Clean up orphaned user records (users in database but not in Clerk)
+export const cleanupOrphanedUsers = async (req, res) => {
+    try {
+        const adminId = req.auth().userId
+        
+        // Lấy tất cả user IDs từ Clerk
+        const clerkUsers = await clerkClient.users.getUserList({ limit: 500 })
+        const clerkUserIds = clerkUsers.data.map(user => user.id)
+        
+        // Tìm users trong database mà không có trong Clerk
+        const allDbUsers = await User.find({}, '_id')
+        const orphanedUsers = allDbUsers.filter(user => !clerkUserIds.includes(user._id))
+        
+        if (orphanedUsers.length === 0) {
+            return res.json({ 
+                success: true, 
+                message: 'No orphaned users found',
+                deletedCount: 0 
+            })
+        }
+        
+        // Xóa các user records ảo
+        const orphanedIds = orphanedUsers.map(user => user._id)
+        const result = await User.deleteMany({ _id: { $in: orphanedIds } })
+        
+        // Log for audit trail
+        console.log(`Admin ${adminId} cleaned up ${result.deletedCount} orphaned user records at ${new Date()}`)
+        console.log('Deleted user IDs:', orphanedIds)
+        
+        res.json({ 
+            success: true, 
+            message: `Cleaned up ${result.deletedCount} orphaned user records`,
+            deletedCount: result.deletedCount 
+        })
+    } catch (error) {
+        console.error('Error cleaning up orphaned users:', error)
         res.json({ success: false, message: error.message })
     }
 }
