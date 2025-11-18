@@ -3,11 +3,11 @@ import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
     {
-        _id: {type: String, require: true},
-        name: {type: String, require: true},
-        email: {type: String, require: true},
+        _id: {type: String, required: true},
+        name: {type: String, required: true},
+        email: {type: String, required: true},
         imageUrl: {type: String, default: ''},
-        clerkId: {type: String, require: true}, // Clerk user ID for role management
+        clerkId: {type: String, required: true}, // Clerk user ID for role management
         role: {
             type: String,
             enum: ['student', 'educator', 'admin'],

@@ -22,8 +22,8 @@ import UserManagement from './components/admin/UserManagement.jsx'
 import EducatorApproval from './components/admin/EducatorApproval.jsx'
 import CourseManagement from './components/admin/CourseManagement.jsx'
 import RevenueManagement from './components/admin/RevenueManagement.jsx'
-
 import RatingManagement from './components/admin/RatingManagement.jsx'
+import EnrollmentManagement from './components/admin/EnrollmentManagement.jsx'
 
 
 
@@ -63,6 +63,7 @@ const App = () => {
           <Route path='/admin' element={<AdminDashboard />} />
           <Route path='users' element={<UserManagement />} />
           <Route path='courses' element={<CourseManagement />} />
+          <Route path='enrollments' element={<EnrollmentManagement />} />
           <Route path='revenue' element={<RevenueManagement />} />
           <Route path='reviews' element={<RatingManagement />} />
           <Route path='educators' element={<EducatorApproval />} />

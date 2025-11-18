@@ -193,80 +193,94 @@ export const addStudent = async (req, res) => {
   try {
     const { courseId, studentId } = req.body;
 
-    // Check if course exists
+    // 1. Check if course exists
     const course = await Course.findById(courseId);
     if (!course) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy khóa học' });
     }
 
-    // Check if student exists
+    // 2. Check if student exists
     const student = await User.findById(studentId);
     if (!student) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy học sinh' });
     }
 
-    // Verify student role using Clerk API
+    // 3. Verify student role (Optional - tùy logic của bạn)
+    /* // Nếu bạn chắc chắn studentId lấy từ list User thì bước này có thể bỏ qua để tiết kiệm thời gian gọi API Clerk
     const userRole = await getUserRoleFromClerk(student.clerkId);
     if (userRole !== 'student') {
       return res.status(400).json({ success: false, message: 'Người dùng này không phải là học sinh' });
     }
+    */
 
-    // Check if already enrolled
+    // 4. Check if already enrolled (Kiểm tra cả trong bảng Enrollment và User cho chắc)
     const existingEnrollment = await Enrollment.findOne({
       student: studentId,
       course: courseId
     });
 
-    if (existingEnrollment) {
+    // Hoặc kiểm tra nhanh trong mảng enrolledCourses của user
+    if (existingEnrollment || student.enrolledCourses.includes(courseId)) {
       return res.status(400).json({ 
         success: false, 
-        message: 'Học sinh đã được ghi danh vào khóa học này' 
+        message: 'Học sinh đã được ghi danh vào khóa học này rồi' 
       });
     }
 
-    // Create enrollment
+    // --- BẮT ĐẦU THÊM DỮ LIỆU ---
+
+    // 5. Create Enrollment Record
+    // SỬA: Đổi type thành 'manual' để phân biệt
     const enrollment = new Enrollment({
       student: studentId,
       course: courseId,
-      enrollmentType: 'manual',
+      enrollmentType: 'manual', 
       status: 'active'
     });
-
     await enrollment.save();
 
-    // Create course progress record
+    // 6. Create Course Progress
     const courseProgress = new CourseProgress({
       userId: studentId,
       courseId: courseId,
       completed: false,
       lectureCompleted: []
     });
-
     await courseProgress.save();
 
-    // Optional: Create a purchase record for tracking
+    // 7. Create Purchase Record (Dành cho thống kê doanh thu = 0)
     const purchase = new Purchase({
       courseId: courseId,
       userId: studentId,
-      amount: 0, // Manual enrollment - no payment
+      amount: 0, // Miễn phí
       status: 'completed',
-      transactionId: `MANUAL_${Date.now()}`,
+      transactionId: `MANUAL_${Date.now()}`, // Tạo mã giao dịch giả
       paymentMethod: 'manual'
     });
-
     await purchase.save();
+
+    // 8. QUAN TRỌNG: Cập nhật mảng enrolledCourses của User
+    // Dùng $addToSet để tránh trùng lặp nếu lỡ có rồi
+    await User.findByIdAndUpdate(studentId, {
+        $addToSet: { enrolledCourses: courseId }
+    });
+
+    // 9. QUAN TRỌNG: Cập nhật mảng enrolledStudents của Course
+    await Course.findByIdAndUpdate(courseId, {
+        $addToSet: { enrolledStudents: studentId }
+    });
 
     res.json({ 
       success: true, 
       message: 'Đã thêm học sinh vào khóa học thành công',
       enrollment 
     });
+
   } catch (error) {
     console.error('Error adding student:', error);
-    res.status(500).json({ success: false, message: 'Lỗi thêm học sinh' });
+    res.status(500).json({ success: false, message: 'Lỗi thêm học sinh: ' + error.message });
   }
 };
-
 // Remove student from course
 export const removeStudent = async (req, res) => {
   try {

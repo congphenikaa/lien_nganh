@@ -258,11 +258,6 @@ const Player = () => {
         {playerData ? (
           <div >
             {/* Debug info - you can remove this after testing */}
-            <div className="mb-2 p-2 bg-gray-100 text-xs rounded">
-              <p><strong>Original URL:</strong> {playerData.lectureUrl}</p>
-              <p><strong>Extracted Video ID:</strong> {getYouTubeVideoId(playerData.lectureUrl)}</p>
-            </div>
-            
             <YouTube 
               videoId={getYouTubeVideoId(playerData.lectureUrl)} 
               iframeClassName="w-full aspect-video"
