@@ -7,9 +7,9 @@ import crypto from 'crypto'
 
 export const getUserData = async (req, res) => {
     try {
-        // 🛡️ Kiểm tra auth function tồn tại
+        //  Kiểm tra auth function tồn tại
         if (typeof req.auth !== 'function') {
-            console.error('❌ Auth middleware not available')
+            console.error(' Auth middleware not available')
             return res.status(401).json({
                 success: false, 
                 message: 'Authentication middleware not configured'
@@ -18,10 +18,10 @@ export const getUserData = async (req, res) => {
 
         const auth = req.auth();
         
-        // 🛡️ Kiểm tra auth object và userId
+        //  Kiểm tra auth object và userId
         if (!auth || !auth.userId) {
-            console.error('❌ Auth failed - no userId. Auth object:', !!auth)
-            console.error('❌ Possible causes: Invalid token, expired session, or Clerk configuration issue')
+            console.error(' Auth failed - no userId. Auth object:', !!auth)
+            console.error(' Possible causes: Invalid token, expired session, or Clerk configuration issue')
             return res.status(401).json({
                 success: false, 
                 message: 'Invalid authentication. Please sign in again.'
@@ -29,16 +29,16 @@ export const getUserData = async (req, res) => {
         }
 
         const userId = auth.userId; 
-        console.log('🔍 getUserData called for userId:', userId);
+        console.log(' getUserData called for userId:', userId);
         
         // 1. TÌM USER TRONG DB
         let user = await User.findById(userId);
-        console.log('🔍 User found in DB:', !!user);
+        console.log(' User found in DB:', !!user);
         
-        // 2. 🛑 LOẠI BỎ LOGIC TẠO USER DỰ PHÒNG TẠI ĐÂY
+        // 2.  LOẠI BỎ LOGIC TẠO USER DỰ PHÒNG TẠI ĐÂY
         if (!user) {
-            console.error('❌ Error: User profile not found in DB. Webhook synchronization failure suspected.');
-            console.error('💡 User ID from token:', userId)
+            console.error(' Error: User profile not found in DB. Webhook synchronization failure suspected.');
+            console.error(' User ID from token:', userId)
             // Trả về 404 và thông báo lỗi rõ ràng.
             return res.status(404).json({
                 success: false, 
@@ -53,7 +53,7 @@ export const getUserData = async (req, res) => {
                             user.role || // Fallback to cached role
                             'student'; // Ultimate fallback
         
-        console.log('🎭 User role:', currentRole)
+        console.log(' User role:', currentRole)
         
         // 4. TRẢ VỀ USER VÀ ROLE MỚI
         const userData = {
@@ -64,7 +64,7 @@ export const getUserData = async (req, res) => {
         res.json({success: true, user: userData});
 
     } catch (error) {
-        console.error('❌ Error in getUserData:', error);
+        console.error(' Error in getUserData:', error);
         
         // Phân loại lỗi cụ thể hơn
         if (error.message?.includes('jwt')) {
@@ -118,7 +118,7 @@ export const createMomoPayment = async (req, res) => {
       status: 'pending'
     })
 
-    // ✅ Tạo extraData
+    //  Tạo extraData
     const extraData = encodeURIComponent(JSON.stringify({
       purchaseId: purchaseData._id.toString(),
       userId,
@@ -169,15 +169,15 @@ export const createMomoPayment = async (req, res) => {
   }
 }
 
-// ✅ Callback khi thanh toán xong
+//  Callback khi thanh toán xong
 export const handlePaymentCallback = async (req, res) => {
-  console.log('🔄 MoMo CALLBACK HIT')
-  console.log('📧 Query:', req.query)
+  console.log(' MoMo CALLBACK HIT')
+  console.log(' Query:', req.query)
 
   try {
     const { resultCode, message, transId, extraData } = req.query
 
-    // ✅ Giải mã extraData an toàn
+    //  Giải mã extraData an toàn
     let purchaseId, userId, courseId
     try {
       if (extraData) {
@@ -187,71 +187,71 @@ export const handlePaymentCallback = async (req, res) => {
         purchaseId = parsed.purchaseId
         userId = parsed.userId
         courseId = parsed.courseId
-        console.log('🎯 Parsed data:', { purchaseId, userId, courseId })
+        console.log(' Parsed data:', { purchaseId, userId, courseId })
       }
     } catch (err) {
-      console.error('❌ extraData parse error:', err)
+      console.error(' extraData parse error:', err)
     }
 
     if (!purchaseId) {
-      console.error('❌ Missing purchase ID')
+      console.error(' Missing purchase ID')
       return res.redirect(`${process.env.FRONTEND_URL}/payment-error?message=Invalid purchase ID`)
     }
 
     const purchase = await Purchase.findById(purchaseId)
     if (!purchase) {
-      console.error('❌ Purchase not found:', purchaseId)
+      console.error(' Purchase not found:', purchaseId)
       return res.redirect(`${process.env.FRONTEND_URL}/payment-error?message=Purchase not found`)
     }
 
-    console.log('💰 Current purchase status:', purchase.status)
+    console.log(' Current purchase status:', purchase.status)
 
     if (resultCode === '0') {
-      // ✅ Thanh toán thành công
-      console.log('🎉 Payment successful, updating purchase...')
+      //  Thanh toán thành công
+      console.log(' Payment successful, updating purchase...')
       purchase.status = 'completed'
       purchase.transactionId = transId
       await purchase.save()
 
       try {
-        // 🛡️ An toàn hơn khi tìm user và course
+        //  An toàn hơn khi tìm user và course
         const [user, course] = await Promise.all([
           User.findById(purchase.userId),
           Course.findById(purchase.courseId)
         ])
 
         if (!user) {
-          console.error('❌ User not found for purchase:', purchase.userId)
+          console.error(' User not found for purchase:', purchase.userId)
           // Vẫn redirect thành công vì payment đã hoàn tất
           return res.redirect(`${process.env.FRONTEND_URL}/payment-success?message=Payment completed but user sync pending`)
         }
 
         if (!course) {
-          console.error('❌ Course not found for purchase:', purchase.courseId)
+          console.error(' Course not found for purchase:', purchase.courseId)
           return res.redirect(`${process.env.FRONTEND_URL}/payment-error?message=Course not found`)
         }
 
-        console.log('👤 Processing enrollment for:', user.name)
-        console.log('📚 Course:', course.courseTitle)
+        console.log(' Processing enrollment for:', user.name)
+        console.log(' Course:', course.courseTitle)
 
-        // 🎓 Xử lý enrollment
+        //  Xử lý enrollment
         let enrollmentUpdated = false
 
         if (!user.enrolledCourses.includes(course._id)) {
           user.enrolledCourses.push(course._id)
           await user.save()
-          console.log('✅ Added course to user')
+          console.log(' Added course to user')
           enrollmentUpdated = true
         }
 
         if (!course.enrolledStudents.includes(user._id)) {
           course.enrolledStudents.push(user._id)
           await course.save()
-          console.log('✅ Added user to course')
+          console.log(' Added user to course')
           enrollmentUpdated = true
         }
         
-        // Tạo Enrollment record cho enrollment management
+        //  Tạo Enrollment record cho enrollment management
         const existingEnrollment = await Enrollment.findOne({ 
           student: user._id, 
           course: course._id 
@@ -264,18 +264,18 @@ export const handlePaymentCallback = async (req, res) => {
             enrollmentType: 'purchase',
             status: 'active'
           })
-          console.log('✅ Created Enrollment record')
+          console.log(' Created Enrollment record')
           enrollmentUpdated = true
         }
 
         if (enrollmentUpdated) {
-          console.log('🎉 Enrollment completed successfully!')
+          console.log(' Enrollment completed successfully!')
         } else {
-          console.log('ℹ️ User already enrolled in this course')
+          console.log(' User already enrolled in this course')
         }
         
       } catch (enrollmentError) {
-        console.error('💥 Enrollment error:', enrollmentError)
+        console.error(' Enrollment error:', enrollmentError)
         // Vẫn redirect thành công vì payment đã hoàn tất
         return res.redirect(`${process.env.FRONTEND_URL}/payment-success?message=Payment completed but enrollment pending`)
       }
@@ -283,14 +283,14 @@ export const handlePaymentCallback = async (req, res) => {
       return res.redirect(`${process.env.FRONTEND_URL}/my-enrollments?success=true`)
     }
 
-    // ❌ Thanh toán thất bại
-    console.log('❌ Payment failed:', message)
+    //  Thanh toán thất bại
+    console.log(' Payment failed:', message)
     purchase.status = 'failed'
     await purchase.save()
     return res.redirect(`${process.env.FRONTEND_URL}/payment-error?message=${encodeURIComponent(message || 'Payment failed')}`)
 
   } catch (err) {
-    console.error('💥 CALLBACK ERROR:', err)
+    console.error(' CALLBACK ERROR:', err)
     return res.redirect(`${process.env.FRONTEND_URL}/payment-error?message=${encodeURIComponent('Payment processing error')}`)
   }
 }
@@ -409,12 +409,12 @@ export const refreshEnrolledCourses = async (req, res) => {
             return res.json({success: false, message: 'User not found'})
         }
         
-        console.log('✅ Refreshed enrolled courses');
+        console.log(' Refreshed enrolled courses');
         console.log('Enrolled courses count:', userData?.enrolledCourses?.length || 0);
         
         res.json({success: true, enrolledCourses: userData.enrolledCourses})
     } catch (error) {
-        console.error('❌ Error in refreshEnrolledCourses:', error);
+        console.error(' Error in refreshEnrolledCourses:', error);
         res.json({success: false, message: error.message})
     }
 }

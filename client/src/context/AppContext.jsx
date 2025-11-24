@@ -44,7 +44,7 @@ export const AppContextProvider = (props) => {
       
       // Wait for user to be fully loaded
       if (!user || !user.id) {
-        console.log('❌ User or User ID not available, skipping fetch');
+        console.log(' User or User ID not available, skipping fetch');
         return;
       }
       
@@ -64,23 +64,28 @@ export const AppContextProvider = (props) => {
         await new Promise(resolve => setTimeout(resolve, 100));
         
         const token = await getToken();
-        console.log('Token available:', !!token);
-        console.log('Token length:', token ? token.length : 0);
-        console.log('Token starts with:', token ? token.substring(0, 20) + '...' : 'null');
+        console.log('🔑 Token available:', !!token);
+        console.log('🔑 Token length:', token ? token.length : 0);
+        console.log('🔑 Token preview:', token ? token.substring(0, 30) + '...' : 'null');
         
-        if (!token || token.length < 10) {
+        // 🛡️ Enhanced token validation
+        if (!token || token === 'null' || token === 'undefined' || token.length < 10) {
           console.error('❌ Invalid or missing token');
+          console.error(`   Token value: "${token}"`);
+          console.error(`   Token type: ${typeof token}`);
           
-          // Retry with longer wait for token
-          if (retryCount < 3) {
-            console.log(`🔄 Retrying for token in ${(retryCount + 1) * 500}ms...`);
+          // Retry with progressive backoff
+          if (retryCount < 5) {
+            const delay = Math.min(1000 * Math.pow(2, retryCount), 5000); // Max 5s delay
+            console.log(`🔄 Retrying for token in ${delay}ms... (attempt ${retryCount + 1}/5)`);
             setTimeout(() => {
               fetchUserData(retryCount + 1);
-            }, (retryCount + 1) * 500);
+            }, delay);
             return;
           }
           
-          throw new Error('No valid authentication token available');
+          console.error('❌ Max retry attempts reached for token');
+          throw new Error('Authentication token unavailable after multiple attempts');
         }
         
         const {data} = await axios.get(backendUrl + '/api/user/data',{headers:{Authorization: `Bearer ${token}`}})

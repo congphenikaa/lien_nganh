@@ -1,4 +1,3 @@
-// controllers/admin/ratingController.js
 import Course from '../../models/Course.js'
 import User from '../../models/User.js'
 import mongoose from 'mongoose'

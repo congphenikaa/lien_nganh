@@ -58,10 +58,20 @@ export const protectAdmin = async (req, res, next) => {
         const authHeader = req.headers.authorization;
         if (authHeader && authHeader.startsWith('Bearer ')) {
             const token = authHeader.substring(7);
-            console.log('ProtectAdmin - Using Bearer token:', token.substring(0, 20) + '...');
             
-            // For now, just allow Bearer token requests
-            // You would verify the token here in a real application
+            // 🛡️ Check for null/undefined token strings
+            if (token === 'null' || token === 'undefined' || !token || token.length < 10) {
+                console.log('ProtectAdmin - Invalid Bearer token:', token);
+                return res.status(401).json({
+                    success: false, 
+                    message: 'Invalid authentication token. Please sign in again.'
+                });
+            }
+            
+            console.log('ProtectAdmin - Valid Bearer token:', token.substring(0, 20) + '...');
+            
+            // TODO: Verify token with Clerk in production
+            // For now, accepting valid-looking tokens
             return next();
         }
 
